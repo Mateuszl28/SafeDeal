@@ -3,7 +3,8 @@ import path from "path";
 // Magazyn dowodów na potrzeby demo — content-addressed (nazwa pliku = SHA-256 treści).
 // W produkcji ten sam kontrakt przyjmie URI z IPFS; on-chain i tak ląduje tylko hash.
 // SAFEDEAL_DATA_DIR pozwala trzymać pliki poza katalogiem aplikacji (np. na hostingu, gdzie jest on tylko do odczytu).
-export const DATA_DIR = process.env.SAFEDEAL_DATA_DIR || process.cwd();
+// Na Vercelu zapisywać można tylko w /tmp (pliki są tam tymczasowe — wystarczy na demo).
+export const DATA_DIR = process.env.SAFEDEAL_DATA_DIR || (process.env.VERCEL ? "/tmp" : process.cwd());
 export const STORE = path.join(DATA_DIR, ".evidence");
 
 export const EXT_BY_TYPE: Record<string, string> = {

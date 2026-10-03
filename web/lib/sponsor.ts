@@ -22,6 +22,15 @@ export function serverConnection(d: Deployment): Connection {
 let cached: Keypair | null | undefined;
 export function sponsorKey(): Keypair | null {
   if (cached !== undefined) return cached;
+  // Hosting (np. Vercel): klucz w zmiennej środowiskowej SPONSOR_SECRET jako tablica JSON z pliku keypair.
+  if (process.env.SPONSOR_SECRET) {
+    try {
+      cached = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(process.env.SPONSOR_SECRET)));
+      return cached;
+    } catch {
+      /* zły format — spróbuj pliku */
+    }
+  }
   const file = process.env.SPONSOR_KEYPAIR || path.join(process.cwd(), "..", "solana", "keys", "sponsor.json");
   try {
     cached = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(file, "utf8"))));
