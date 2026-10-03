@@ -9,6 +9,9 @@ drobni wykonawcy rozliczający się z klientem w etapach. To ludzie spoza świat
 „sejf”, „paczka”, „reklamacja”, a nie „PDA” czy „lamporty”. Warstwa techniczna jest pod spodem, ale
 na życzenie widoczna: każda akcja ma link do Solana Explorer.
 
+**Na żywo (Solana devnet):** program `B7aMTf719JpBybXggkHyFsAKemfM6eNbAU6mA7rUzJmn` —
+[Solana Explorer](https://explorer.solana.com/address/B7aMTf719JpBybXggkHyFsAKemfM6eNbAU6mA7rUzJmn?cluster=devnet).
+
 ## Uzasadnienie projektowe
 
 **Jaka relacja finansowa:** zakup z ogłoszenia między obcymi ludźmi (płatność za towar z wysyłką albo z
@@ -44,7 +47,10 @@ Cancelled ✔      Refunded ✔              Disputed ──(sprzedawca ignoruje
                                               └──(arbitrzy milczą)──▶ Split 50/50 ✔
 ```
 
-**Moment, w którym pośrednik przestaje być potrzebny (demo):** Bartek klika „Kup” → na stronie transakcji pasek
+**Moment, w którym pośrednik przestaje być potrzebny (demo):** na stronie każdej transakcji panel
+**„Kto może teraz ruszyć te pieniądze?”** wylicza z reguł programu, dokąd i pod jakim warunkiem mogą trafić środki
+z sejfu (z nazwą instrukcji i znacznikiem „może każdy” przy rozliczeniach po terminie) — oraz kto *nie może*:
+sprzedawca przed spełnieniem warunku, kupujący (nie cofnie wpłaty) i autorzy SafeDeal. Dalej: Bartek klika „Kup” → na stronie transakcji pasek
 „Pieniądze trzyma program, nie sprzedawca” pokazuje sejf z kwotą, link prowadzi do konta sejfu w Solana Explorer.
 Alicja jeszcze nic nie ma, a Celina (obca osoba) próbuje cokolwiek zrobić i program odmawia. Po potwierdzeniu
 doręczenia przez 2 z 3 niezależnych źródeł i upływie okna reklamacji wypłatę może wywołać ktokolwiek — także
@@ -133,6 +139,10 @@ oracle/                          szkic źródła Chainlink Functions (InPost) z 
 - **Historia każdej transakcji** ze zdarzeń w logach — każdy wpis z linkiem do Solana Explorer.
 - **Rozmowa** z wiadomościami podpisanymi kluczem (ed25519), weryfikowanymi w przeglądarce.
 - **Reguły programu** (`/stats`) — oracle, arbitrzy, terminy i kaucja odczytane z konta konfiguracji.
+- **Prawdziwy portfel bez szukania SOL** — przycisk „Przygotuj portfel do testu”: sponsor opłat (osobny portfel na
+  devnecie, `web/app/api/sponsor`) wysyła 0,05 testowego SOL, a kran programu 1000 testowych USDC. Sponsor płaci
+  tylko opłaty sieci — nie ma żadnych uprawnień w programie ani dostępu do sejfów (gdyby zniknął, wystarczy
+  dowolny faucet). Z myślą o osobach spoza krypto: nie muszą wiedzieć, czym jest SOL, żeby kupić rower.
 
 ## Uruchomienie
 
@@ -146,7 +156,8 @@ npm install
 # 2a. lokalnie (bez internetu i bez faucetu)
 solana-test-validator --reset             # osobny terminal
 solana program deploy target/deploy/safedeal.so --program-id target/deploy/safedeal-keypair.json -u localhost
-npm run setup:local && npm run test:local && npm run seed:local
+npm run setup:local && npm run test:local     # e2e: terminy w sekundach
+# do prezentacji lokalnie: świeży walidator + npm run setup:local-demo && npm run seed:local (terminy w minutach)
 
 # 2b. devnet (testowy SOL za darmo: https://faucet.solana.com)
 solana program deploy target/deploy/safedeal.so --program-id target/deploy/safedeal-keypair.json -u devnet
@@ -157,8 +168,10 @@ npm run oracle:devnet                     # opcjonalnie: relayer sam potwierdza 
 cd ../web && npm install && npm run dev   # http://localhost:3000  (NEXT_PUBLIC_CLUSTER=localnet dla lokalnego)
 ```
 
-`setup` zapisuje adresy do `web/lib/deployments.json`, a klucze person demo do `web/lib/demo-keys.json`
-(tylko devnet/localnet — bez żadnej wartości). Na devnecie terminy są w minutach, lokalnie w sekundach.
+`setup` zapisuje adresy do `web/lib/deployments.json`, a klucze person demo (tylko devnet/localnet, bez wartości)
+do `solana/keys/` i `web/.env.local` jako `NEXT_PUBLIC_DEMO_KEYS` — oba poza repozytorium; po setupie zrestartuj
+`npm run dev`. Opcjonalnie w `web/.env.local`: `NEXT_PUBLIC_RPC=<prywatny endpoint HTTP devnetu>` (publiczny ma
+limity), a `node scripts/sponsor-setup.mjs devnet 1.5` zakłada portfel sponsora opłat. Na devnecie terminy są w minutach, lokalnie w sekundach.
 
 ### Scenariusz na prezentację (3 min)
 1. **Alicja** tworzy ofertę „Rower gravel”, 250 USDC → kopiuje link.
