@@ -1,0 +1,20 @@
+node_modules
+.next
+artifacts
+cache
+typechain-types
+coverage
+.env
+*.tsbuildinfo
+next-env.d.ts
+.evidence
+.next-build
+.chat
+.env.local
+*.log
+# klucze (nawet devnetowe) i prywatny endpoint RPC — poza repozytorium
+solana/keys/
+
+solana/target/
+solana/test-ledger/
+solana/.anchor/

@@ -1,0 +1,60 @@
+{
+  "localnet": {
+    "cluster": "localnet",
+    "rpc": "http://127.0.0.1:8899",
+    "programId": "B7aMTf719JpBybXggkHyFsAKemfM6eNbAU6mA7rUzJmn",
+    "mint": "9JjN4kw7BRyyT7YG8zmS4w8mCc1DLNqD7mXKxUnSaaQ4",
+    "config": "SdpSvGt1DomfSRBcorSj5sXuMS7JhFNGQhJDvxGjz77",
+    "oracles": [
+      "GP448JDdUnSk8gp58dNu2joLzSYoyT6kmZ8syxJG24oE",
+      "3oGQ15GbpnNpZir5WqLJYAizZtwz2u6dbXp2EtuSDYJ9",
+      "E2H2EBsLztXiVghswZp2EqKfQuoXZYZQ6ppCwVnpY64R"
+    ],
+    "oracleQuorum": 2,
+    "arbiters": [
+      "BTVRh5fQHhNujkTxFv8LCVzEz4EijSYq634vQSy7smf5",
+      "3uwhiPV1Jh4Z5bpLpWNkNwvYPDg5zhw378rru4UFkYaN",
+      "AYGLuiELn9u3z8omBndvVHjh2oZjKzc72bgBG6yoBuPe"
+    ],
+    "arbiterQuorum": 2,
+    "windows": {
+      "ship": 900,
+      "transit": 300,
+      "inspection": 180,
+      "response": 300,
+      "arbitration": 300,
+      "reveal": 180
+    },
+    "bondBps": 500,
+    "deployedAt": "2026-10-03T11:11:32.685Z"
+  },
+  "devnet": {
+    "cluster": "devnet",
+    "rpc": "https://api.devnet.solana.com",
+    "programId": "B7aMTf719JpBybXggkHyFsAKemfM6eNbAU6mA7rUzJmn",
+    "mint": "DNsEicuaMXnzqFuVpSgSVb56Qfr69reaKDBSu5XgKCYx",
+    "config": "SdpSvGt1DomfSRBcorSj5sXuMS7JhFNGQhJDvxGjz77",
+    "oracles": [
+      "GP448JDdUnSk8gp58dNu2joLzSYoyT6kmZ8syxJG24oE",
+      "3oGQ15GbpnNpZir5WqLJYAizZtwz2u6dbXp2EtuSDYJ9",
+      "E2H2EBsLztXiVghswZp2EqKfQuoXZYZQ6ppCwVnpY64R"
+    ],
+    "oracleQuorum": 2,
+    "arbiters": [
+      "BTVRh5fQHhNujkTxFv8LCVzEz4EijSYq634vQSy7smf5",
+      "3uwhiPV1Jh4Z5bpLpWNkNwvYPDg5zhw378rru4UFkYaN",
+      "AYGLuiELn9u3z8omBndvVHjh2oZjKzc72bgBG6yoBuPe"
+    ],
+    "arbiterQuorum": 2,
+    "windows": {
+      "ship": 900,
+      "transit": 300,
+      "inspection": 180,
+      "response": 300,
+      "arbitration": 300,
+      "reveal": 180
+    },
+    "bondBps": 500,
+    "deployedAt": "2026-10-03T12:08:23.593Z"
+  }
+}

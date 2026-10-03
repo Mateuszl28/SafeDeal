@@ -1,0 +1,20 @@
+{
+  "name": "safedeal-solana",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup:local": "node scripts/setup.mjs localnet",
+    "setup:devnet": "node scripts/setup.mjs devnet",
+    "seed:local": "node scripts/seed.mjs localnet",
+    "seed:devnet": "node scripts/seed.mjs devnet",
+    "test:local": "node scripts/e2e.mjs localnet",
+    "oracle:devnet": "node scripts/oracle-relayer.mjs devnet",
+    "oracle:local": "node scripts/oracle-relayer.mjs localnet",
+    "setup:local-demo": "node scripts/setup.mjs localnet demo"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.32.1",
+    "@solana/spl-token": "^0.4.15",
+    "@solana/web3.js": "^1.98.0"
+  }
+}
