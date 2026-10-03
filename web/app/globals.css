@@ -349,3 +349,16 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); }
 .attempt-result.blocked { background: var(--accent-soft); color: var(--accent); }
 .attempt-result.passed { background: var(--warn-soft); color: var(--warn); }
 .attempt-result pre { white-space: pre-wrap; word-break: break-all; font-size: 0.75rem; color: var(--muted); margin: 6px 0 0; }
+
+/* telefon: nic nie może rozpychać strony w poziomie */
+.mono, code { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .nav { flex-wrap: wrap; }
+  .balance { flex-wrap: wrap; }
+  .header-row { align-items: flex-start; }
+  .deal-side { align-items: flex-start; }
+  .deal-head h1 { font-size: 1.5rem; }
+  .hero h1 { font-size: 1.7rem; }
+  .money-rules .paths { grid-template-columns: 1fr; }
+  .attempt-head .btn { width: 100%; }
+}

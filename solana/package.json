@@ -10,7 +10,8 @@
     "test:local": "node scripts/e2e.mjs localnet",
     "oracle:devnet": "node scripts/oracle-relayer.mjs devnet",
     "oracle:local": "node scripts/oracle-relayer.mjs localnet",
-    "setup:local-demo": "node scripts/setup.mjs localnet demo"
+    "setup:local-demo": "node scripts/setup.mjs localnet demo",
+    "offers:devnet": "node scripts/offers.mjs devnet"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",

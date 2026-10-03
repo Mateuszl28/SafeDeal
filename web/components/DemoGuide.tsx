@@ -25,6 +25,10 @@ export function DemoGuide() {
   const w = useWallet();
   const path = usePathname();
   const [open, setOpen] = useState(true);
+  // Na telefonie przewodnik zasłaniałby pół ekranu — startuje zwinięty.
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 760px)").matches) setOpen(false);
+  }, []);
   const [step, setStep] = useState<Step | null>(null);
   const dealId = path.startsWith("/deal/") ? path.split("/")[2] : null;
 
