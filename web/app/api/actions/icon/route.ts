@@ -44,7 +44,7 @@ export async function GET(req: Request) {
 <g font-family="Arial, sans-serif">${lines}</g>
 <text x="64" y="590" font-family="Arial, sans-serif" font-size="72" font-weight="700" fill="#7FD1B4">${esc(price)}</text>
 <rect x="64" y="650" width="672" height="86" rx="18" fill="#1D3A30"/>
-<text x="96" y="706" font-family="Arial, sans-serif" font-size="32" fill="#E2F0EB">🔒 Pieniądze trzyma program, nie sprzedawca</text>
+<text x="92" y="704" font-family="Arial, sans-serif" font-size="28" fill="#E2F0EB">🔒 Pieniądze trzyma program, nie sprzedawca</text>
 </svg>`;
   return new Response(svg, { headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=60", "Access-Control-Allow-Origin": "*" } });
 }

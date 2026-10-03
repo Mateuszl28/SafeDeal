@@ -147,7 +147,9 @@ oracle/                          szkic źródła Chainlink Functions (InPost) z 
 - **Reguły programu** (`/stats`) — oracle, arbitrzy, terminy i kaucja odczytane z konta konfiguracji.
 - **Zakup prosto z posta lub czatu — Solana Actions / Blinks.** Każda otwarta oferta ma endpoint
   `web/app/api/actions/deal/[id]` (+ `actions.json`): link wklejony na X, w czat albo otwarty w portfelu pokazuje kartę
-  „Kup i zablokuj 250 USDC” z gwarancjami, a zakup to jeden podpis — bez wchodzenia na stronę.
+  „Kup i zablokuj 250 USDC” z gwarancjami, a zakup to jeden podpis — bez wchodzenia na stronę. Na stronie oferty
+  „Podgląd karty” renderuje ją z tego samego endpointu tak, jak zrobi to klient Blinks (działa też bez publicznego
+  adresu), a jej przycisk kupuje tą samą ścieżką.
 - **Zakup bez SOL.** Transakcję kupna składa serwer, a sponsor opłat podpisuje ją jako płacący opłatę (i dopłaca rent
   za konto profilu). Kupujący tylko podpisuje; brakujące testowe USDC dokłada kran programu w tej samej transakcji.
   Sprawdzone na devnecie: świeży portfel z 0 SOL i 0 USDC kupił ofertę jednym podpisem. Ten sam mechanizm obsługuje
@@ -181,6 +183,7 @@ npm run oracle:devnet                     # relayer: numery InPost potwierdza po
 
 # 3. frontend
 cd ../web && npm install && npm run dev   # http://localhost:3000  (NEXT_PUBLIC_CLUSTER=localnet dla lokalnego)
+npm run demo                              # na prezentację: build produkcyjny + serwer (szybszy, bez przeładowań)
 ```
 
 `setup` zapisuje adresy do `web/lib/deployments.json`, a klucze person demo (tylko devnet/localnet, bez wartości)

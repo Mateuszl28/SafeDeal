@@ -362,3 +362,10 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); }
   .money-rules .paths { grid-template-columns: 1fr; }
   .attempt-head .btn { width: 100%; }
 }
+.blink-modal { position: fixed; inset: 0; background: rgba(10, 14, 12, 0.55); display: grid; place-items: center; z-index: 40; padding: 16px; }
+.blink-frame { background: var(--surface); border-radius: 16px; padding: 18px; width: min(460px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.blink-card { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--bg); }
+.blink-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.blink-body { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.blink-body p { margin: 0; white-space: pre-wrap; font-size: 0.88rem; color: var(--muted); }
+.blink-host { font-size: 0.78rem; color: var(--muted); }

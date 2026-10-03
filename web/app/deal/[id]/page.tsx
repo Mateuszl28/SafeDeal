@@ -123,7 +123,7 @@ export default function DealPage() {
             </button>
           )}
           {s === State.Created && <ShareQr id={idParam} />}
-          {s === State.Created && !deal.pickupAllowed && <BlinkShare id={idParam} />}
+          {s === State.Created && !deal.pickupAllowed && <BlinkShare id={idParam} deal={deal} />}
           {s !== State.Created && (
             <Link href={`/deal/${idParam}/potwierdzenie`} className="btn ghost sm">
               Potwierdzenie (PDF)
