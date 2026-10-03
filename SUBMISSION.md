@@ -65,7 +65,7 @@ dla serwisów z ogłoszeniami, audyt i odebranie upgrade authority (`--final`).
 
 ## Linki
 
-- Repozytorium: [uzupełnij]
+- Repozytorium: https://github.com/Mateuszl28/SafeDeal
 - Film (≤ 3 min): [uzupełnij]
 - Prezentacja PDF: [uzupełnij]
 - Program w Solana Explorer: https://explorer.solana.com/address/B7aMTf719JpBybXggkHyFsAKemfM6eNbAU6mA7rUzJmn?cluster=devnet
