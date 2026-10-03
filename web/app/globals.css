@@ -338,3 +338,4 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); }
 .money-rules .nobody { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 4px; font-size: 0.9rem; color: var(--muted); }
 .notice.onboard { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
 .notice.onboard span { flex: 1 1 320px; }
+.blink-share { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }

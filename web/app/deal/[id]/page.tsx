@@ -19,6 +19,7 @@ import { ChatPanel } from "@/components/ChatPanel";
 import { ReviewPanel } from "@/components/Reviews";
 import { PickupPanel } from "@/components/PickupPanel";
 import { MoneyRules } from "@/components/MoneyRules";
+import { BlinkShare } from "@/components/BlinkShare";
 import { Pln } from "@/lib/pln";
 import { parseStage } from "@/lib/project";
 
@@ -122,6 +123,7 @@ export default function DealPage() {
             </button>
           )}
           {s === State.Created && <ShareQr id={idParam} />}
+          {s === State.Created && !deal.pickupAllowed && <BlinkShare id={idParam} />}
           {s !== State.Created && (
             <Link href={`/deal/${idParam}/potwierdzenie`} className="btn ghost sm">
               Potwierdzenie (PDF)
@@ -215,10 +217,13 @@ export default function DealPage() {
             <button
               className="btn"
               disabled={!!w.busy}
-              onClick={() => act("fund", [], "Wpłacono do sejfu")}
+              onClick={() => (w.mode === "wallet" && !deal.pickupAllowed ? w.buySponsored(deal) : act("fund", [], "Wpłacono do sejfu"))}
             >
               Kup i zablokuj {fmtUsdc(deal.amount)} w sejfie
             </button>
+          )}
+          {canBuy && w.mode === "wallet" && !deal.pickupAllowed && (
+            <p className="muted small">Opłatę sieci płaci sponsor, a brakujące testowe USDC doda kran — wystarczy podpisać w portfelu.</p>
           )}
 
           {isSeller && s === State.Created && (

@@ -74,6 +74,8 @@ type Ctx = {
   airdrop: () => Promise<boolean>;
   /** Nowy portfel: SOL na opłaty od sponsora + testowe USDC z kranu programu. */
   prepareWallet: () => Promise<void>;
+  /** Zakup bez SOL: transakcję składa serwer (Solana Actions), opłatę płaci sponsor, kupujący tylko podpisuje. */
+  buySponsored: (deal: Deal, label?: string) => Promise<string | null>;
   solBalance?: number;
   /** Podpis wiadomości kluczem bieżącego konta (bez transakcji i bez opłat), hex. */
   signMessage: (message: string) => Promise<string | null>;
@@ -314,6 +316,56 @@ function Inner({ children }: { children: ReactNode }) {
     await write("faucet", [], { label: "Kran: 1000 testowych USDC" });
   }, [airdrop, write]);
 
+  const buySponsored = useCallback(
+    async (deal: Deal, label = "Wpłacono do sejfu"): Promise<string | null> => {
+      if (!address) {
+        setError("Najpierw połącz portfel.");
+        return null;
+      }
+      setBusy(label);
+      setError(null);
+      try {
+        const r = await fetch(`/api/actions/deal/${deal.id}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ account: address }),
+        });
+        const j = (await r.json()) as { transaction?: string; message?: string };
+        if (!r.ok || !j.transaction) throw new Error(j.message ?? "Serwer nie przygotował transakcji.");
+        const tx = Transaction.from(Buffer.from(j.transaction, "base64"));
+        let signed: Transaction;
+        if (mode === "demo") {
+          if (!persona) throw new Error("Brak persony.");
+          tx.partialSign(persona.keypair);
+          signed = tx;
+        } else {
+          if (!adapter.signTransaction) throw new Error("Portfel nie obsługuje podpisu transakcji.");
+          signed = await adapter.signTransaction(tx);
+        }
+        const signature = await connection.sendRawTransaction(signed.serialize());
+        const res = await connection.confirmTransaction(signature, "confirmed");
+        if (res.value.err) throw new Error(`Transakcja odrzucona: ${JSON.stringify(res.value.err)}`);
+        setLastTx({ signature, label });
+        refresh();
+        return signature;
+      } catch (e) {
+        let logs: string[] | null = null;
+        if (e instanceof SendTransactionError) {
+          try {
+            logs = await e.getLogs(connection);
+          } catch {
+            logs = e.logs ?? null;
+          }
+        }
+        setError(readableError(e, logs));
+        return null;
+      } finally {
+        setBusy(null);
+      }
+    },
+    [address, mode, persona, adapter, connection, refresh],
+  );
+
   const signMessage = useCallback(
     async (message: string): Promise<string | null> => {
       const bytes = new TextEncoder().encode(message);
@@ -356,6 +408,7 @@ function Inner({ children }: { children: ReactNode }) {
     faucet,
     airdrop,
     prepareWallet,
+    buySponsored,
     solBalance,
     signMessage,
   };

@@ -139,6 +139,14 @@ oracle/                          szkic źródła Chainlink Functions (InPost) z 
 - **Historia każdej transakcji** ze zdarzeń w logach — każdy wpis z linkiem do Solana Explorer.
 - **Rozmowa** z wiadomościami podpisanymi kluczem (ed25519), weryfikowanymi w przeglądarce.
 - **Reguły programu** (`/stats`) — oracle, arbitrzy, terminy i kaucja odczytane z konta konfiguracji.
+- **Zakup prosto z posta lub czatu — Solana Actions / Blinks.** Każda otwarta oferta ma endpoint
+  `web/app/api/actions/deal/[id]` (+ `actions.json`): link wklejony na X, w czat albo otwarty w portfelu pokazuje kartę
+  „Kup i zablokuj 250 USDC” z gwarancjami, a zakup to jeden podpis — bez wchodzenia na stronę.
+- **Zakup bez SOL.** Transakcję kupna składa serwer, a sponsor opłat podpisuje ją jako płacący opłatę (i dopłaca rent
+  za konto profilu). Kupujący tylko podpisuje; brakujące testowe USDC dokłada kran programu w tej samej transakcji.
+  Sprawdzone na devnecie: świeży portfel z 0 SOL i 0 USDC kupił ofertę jednym podpisem. Ten sam mechanizm obsługuje
+  przycisk „Kup” w trybie portfela. Serwer nie egzekwuje żadnych reguł — tylko składa instrukcje; o tym, dokąd trafią
+  pieniądze, decyduje program.
 - **Prawdziwy portfel bez szukania SOL** — przycisk „Przygotuj portfel do testu”: sponsor opłat (osobny portfel na
   devnecie, `web/app/api/sponsor`) wysyła 0,05 testowego SOL, a kran programu 1000 testowych USDC. Sponsor płaci
   tylko opłaty sieci — nie ma żadnych uprawnień w programie ani dostępu do sejfów (gdyby zniknął, wystarczy
