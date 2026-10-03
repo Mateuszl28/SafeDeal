@@ -29,6 +29,7 @@ export function Header() {
           </Link>
           <Link href="/">Oferty</Link>
           <Link href="/stats">Statystyki</Link>
+          <Link href="/jury">Dla jury</Link>
           {w.address && <Link href={`/u/${w.address}`}>Mój profil</Link>}
         </div>
         <div className="seg">

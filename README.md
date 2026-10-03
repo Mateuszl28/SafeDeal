@@ -58,6 +58,12 @@ osoba spoza transakcji.
 
 ## Pytania jury — odpowiedzi z odnośnikami do kodu
 
+W aplikacji jest strona **`/jury` („Dla jury: sprawdź sam”)**: odczytany z łańcucha status upgrade authority programu
+(czy autor wciąż może zmienić kod), niezmienne reguły z konta konfiguracji oraz **„Spróbuj oszukać program”** —
+przyciski budujące prawdziwe nieuczciwe transakcje (wypłata z sejfu z pominięciem programu, zwrot „kupującemu” na
+własne konto, potwierdzenie odbioru za kupującego, rozliczenie przed terminem) i symulujące je w sieci
+(`simulateTransaction`: ta sama walidacja, bez opłat). Widać, który program je odrzuca i z jakim błędem.
+
 Program: [`solana/programs/safedeal/src/lib.rs`](solana/programs/safedeal/src/lib.rs) (Anchor 0.32).
 
 **Gdzie dokładnie znika pośrednik?**
