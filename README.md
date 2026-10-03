@@ -117,7 +117,7 @@ solana/
   scripts/setup.mjs              mint testowego USDC (mint authority = PDA programu), persony demo, initialize
   scripts/seed.mjs               przykładowe transakcje w różnych stanach
   scripts/e2e.mjs                test end-to-end (9 scenariuszy, w tym znikanie stron i próby obejścia reguł)
-  scripts/oracle-relayer.mjs     relayer oracle doręczeń dla przesyłek DEMO-…
+  scripts/oracle-relayer.mjs     relayer oracle: prawdziwe numery InPost (publiczne API śledzenia) + symulacja DEMO-…
 web/                             Next.js + @coral-xyz/anchor + Wallet Adapter (Phantom, Solflare…)
   lib/solana.ts                  PDA, odczyt kont, instrukcje, historia ze zdarzeń w logach transakcji
   lib/wallet.tsx                 tryb demo (persony z kluczami devnet) i prawdziwy portfel
@@ -170,7 +170,8 @@ npm run setup:local && npm run test:local     # e2e: terminy w sekundach
 # 2b. devnet (testowy SOL za darmo: https://faucet.solana.com)
 solana program deploy target/deploy/safedeal.so --program-id target/deploy/safedeal-keypair.json -u devnet
 npm run setup:devnet && npm run seed:devnet
-npm run oracle:devnet                     # opcjonalnie: relayer sam potwierdza przesyłki DEMO-… po 15 s
+npm run oracle:devnet                     # relayer: numery InPost potwierdza po statusie „delivered” z API InPost,
+                                          # przesyłki DEMO-… po 15 s
 
 # 3. frontend
 cd ../web && npm install && npm run dev   # http://localhost:3000  (NEXT_PUBLIC_CLUSTER=localnet dla lokalnego)
@@ -194,8 +195,9 @@ limity), a `node scripts/sponsor-setup.mjs devnet 1.5` zakłada portfel sponsora
 
 ## Ograniczenia (świadome)
 
-- Oracle w demo to klucze w przeglądarce/relayerze — symulacja niezależnych źródeł. W produkcji każde źródło
-  to osobny operator; program już dziś wymaga kworum 2 z 3.
+- Oracle: relayer czyta prawdziwy status z publicznego API InPost, ale wszystkie 3 klucze źródeł trzyma jeden
+  proces (a w panelu demo — przeglądarka). W produkcji każde źródło to osobny operator; program już dziś wymaga
+  kworum 2 z 3.
 - Rada arbitrów jest stała (zapisana w `initialize`); brak otwartej puli z kaucją i losowaniem.
 - Pierwsze `initialize` może wywołać ktokolwiek — robimy je od razu po wdrożeniu (w produkcji: tylko upgrade authority).
 - Konta transakcji nie są zamykane po rozliczeniu (rent ~0,014 SOL na ofertę zostaje zablokowany).

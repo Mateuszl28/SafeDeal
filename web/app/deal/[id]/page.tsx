@@ -194,7 +194,13 @@ export default function DealPage() {
                 {deal.tracking}
               </a>
             ) : (
-              <span className="mono">{deal.tracking}</span>
+              /^\d{20,26}$/.test(deal.tracking) ? (
+                <a href={`https://inpost.pl/sledzenie-przesylek?number=${deal.tracking}`} target="_blank" rel="noreferrer" className="plink mono" title="Status u przewoźnika — ten sam, który relayer oracle sprawdza w API InPost">
+                  {deal.tracking} ↗
+                </a>
+              ) : (
+                <span className="mono">{deal.tracking}</span>
+              )
             )}
           </p>
         )}

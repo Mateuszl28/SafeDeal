@@ -143,10 +143,24 @@ export async function fetchDeal(program: Program, d: Deployment, id: bigint): Pr
   return a ? toDeal(pda, a) : null;
 }
 
-/** Wszystkie transakcje programu (getProgramAccounts), od najnowszej. */
+/**
+ * Wszystkie transakcje programu, od najnowszej. Bez getProgramAccounts (darmowe plany RPC go nie mają):
+ * licznik z konta konfiguracji, a konta ofert pobieramy po adresach PDA paczkami po 100.
+ */
 export async function fetchAllDeals(program: Program): Promise<Deal[]> {
-  const all = await (program.account as any).deal.all();
-  return all.map((x: any) => toDeal(x.publicKey, x.account)).sort((a: Deal, b: Deal) => Number(b.id - a.id));
+  const p = pdas(program.programId.toBase58());
+  const cfg = await (program.account as any).config.fetch(p.config());
+  const count = Number(cfg.dealCount.toString());
+  const keys = Array.from({ length: count }, (_, i) => p.deal(BigInt(count - i)));
+  const out: Deal[] = [];
+  for (let i = 0; i < keys.length; i += 100) {
+    const chunk = keys.slice(i, i + 100);
+    const infos = await program.provider.connection.getMultipleAccountsInfo(chunk, "confirmed");
+    infos.forEach((info, j) => {
+      if (info) out.push(toDeal(chunk[j], program.coder.accounts.decode("deal", info.data)));
+    });
+  }
+  return out;
 }
 
 export async function fetchProfile(program: Program, d: Deployment, owner: Address): Promise<Profile> {
