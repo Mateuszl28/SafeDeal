@@ -251,6 +251,52 @@ function Inner({ children }: { children: ReactNode }) {
     [mode, persona],
   );
 
+  /**
+   * Transakcja złożona przez serwer i częściowo podpisana przez sponsora opłat (Solana Actions / zakup bez SOL).
+   * Użytkownik tylko podpisuje — portfelem albo kluczem persony demo.
+   */
+  const sendServerTx = useCallback(
+    async (url: string, body: object, label: string): Promise<string | null> => {
+      setBusy(label);
+      setError(null);
+      try {
+        const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+        const j = (await r.json()) as { transaction?: string; message?: string };
+        if (!r.ok || !j.transaction) throw new Error(j.message ?? "Serwer nie przygotował transakcji.");
+        const tx = Transaction.from(Buffer.from(j.transaction, "base64"));
+        let signed: Transaction;
+        if (mode === "demo") {
+          if (!persona) throw new Error("Brak persony.");
+          tx.partialSign(persona.keypair);
+          signed = tx;
+        } else {
+          if (!adapter.signTransaction) throw new Error("Portfel nie obsługuje podpisu transakcji.");
+          signed = await adapter.signTransaction(tx);
+        }
+        const signature = await connection.sendRawTransaction(signed.serialize());
+        const res = await connection.confirmTransaction(signature, "confirmed");
+        if (res.value.err) throw new Error(`Transakcja odrzucona: ${JSON.stringify(res.value.err)}`);
+        setLastTx({ signature, label });
+        refresh();
+        return signature;
+      } catch (e) {
+        let logs: string[] | null = null;
+        if (e instanceof SendTransactionError) {
+          try {
+            logs = await e.getLogs(connection);
+          } catch {
+            logs = e.logs ?? null;
+          }
+        }
+        setError(readableError(e, logs));
+        return null;
+      } finally {
+        setBusy(null);
+      }
+    },
+    [mode, persona, adapter, connection, refresh],
+  );
+
   const write: Ctx["write"] = useCallback(
     async (fn, args, opts) => {
       if (!deployment || !program) return null;
@@ -258,6 +304,15 @@ function Inner({ children }: { children: ReactNode }) {
       if (!kp && mode === "demo") {
         setError("Brak person demo — uruchom skrypt konfiguracji devnetu.");
         return null;
+      }
+      if (fn === "createDeal" && mode === "wallet" && deployment.cluster === "devnet" && adapter.publicKey) {
+        // Sprzedawca bez SOL: rent za konto oferty i opłatę pokrywa sponsor, sprzedawca tylko podpisuje.
+        const a = args[0] as { amount: bigint } & Record<string, unknown>;
+        return sendServerTx(
+          "/api/sponsor/create-deal",
+          { account: adapter.publicKey.toBase58(), args: { ...a, amount: a.amount.toString() } },
+          opts?.label ?? "Utworzono ofertę",
+        );
       }
       return send(
         opts?.label ?? fn,
@@ -276,7 +331,7 @@ function Inner({ children }: { children: ReactNode }) {
         kp,
       );
     },
-    [program, signerFor, send, mode],
+    [program, signerFor, send, mode, adapter.publicKey, sendServerTx],
   );
 
   const faucet = useCallback(async () => {
@@ -322,48 +377,9 @@ function Inner({ children }: { children: ReactNode }) {
         setError("Najpierw połącz portfel.");
         return null;
       }
-      setBusy(label);
-      setError(null);
-      try {
-        const r = await fetch(`/api/actions/deal/${deal.id}`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ account: address }),
-        });
-        const j = (await r.json()) as { transaction?: string; message?: string };
-        if (!r.ok || !j.transaction) throw new Error(j.message ?? "Serwer nie przygotował transakcji.");
-        const tx = Transaction.from(Buffer.from(j.transaction, "base64"));
-        let signed: Transaction;
-        if (mode === "demo") {
-          if (!persona) throw new Error("Brak persony.");
-          tx.partialSign(persona.keypair);
-          signed = tx;
-        } else {
-          if (!adapter.signTransaction) throw new Error("Portfel nie obsługuje podpisu transakcji.");
-          signed = await adapter.signTransaction(tx);
-        }
-        const signature = await connection.sendRawTransaction(signed.serialize());
-        const res = await connection.confirmTransaction(signature, "confirmed");
-        if (res.value.err) throw new Error(`Transakcja odrzucona: ${JSON.stringify(res.value.err)}`);
-        setLastTx({ signature, label });
-        refresh();
-        return signature;
-      } catch (e) {
-        let logs: string[] | null = null;
-        if (e instanceof SendTransactionError) {
-          try {
-            logs = await e.getLogs(connection);
-          } catch {
-            logs = e.logs ?? null;
-          }
-        }
-        setError(readableError(e, logs));
-        return null;
-      } finally {
-        setBusy(null);
-      }
+      return sendServerTx(`/api/actions/deal/${deal.id}`, { account: address }, label);
     },
-    [address, mode, persona, adapter, connection, refresh],
+    [address, sendServerTx],
   );
 
   const signMessage = useCallback(

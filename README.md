@@ -153,7 +153,8 @@ oracle/                          szkic źródła Chainlink Functions (InPost) z 
 - **Zakup bez SOL.** Transakcję kupna składa serwer, a sponsor opłat podpisuje ją jako płacący opłatę (i dopłaca rent
   za konto profilu). Kupujący tylko podpisuje; brakujące testowe USDC dokłada kran programu w tej samej transakcji.
   Sprawdzone na devnecie: świeży portfel z 0 SOL i 0 USDC kupił ofertę jednym podpisem. Ten sam mechanizm obsługuje
-  przycisk „Kup” w trybie portfela. Serwer nie egzekwuje żadnych reguł — tylko składa instrukcje; o tym, dokąd trafią
+  przycisk „Kup” w trybie portfela. Tak samo wystawienie oferty (`web/app/api/sponsor/create-deal`): sponsor pokrywa
+  opłatę i rent za konto oferty, więc sprzedawca z pustym portfelem też tylko podpisuje (sprawdzone na devnecie). Serwer nie egzekwuje żadnych reguł — tylko składa instrukcje; o tym, dokąd trafią
   pieniądze, decyduje program.
 - **Prawdziwy portfel bez szukania SOL** — przycisk „Przygotuj portfel do testu”: sponsor opłat (osobny portfel na
   devnecie, `web/app/api/sponsor`) wysyła 0,05 testowego SOL, a kran programu 1000 testowych USDC. Sponsor płaci
