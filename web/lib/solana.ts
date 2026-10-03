@@ -180,6 +180,10 @@ export async function tokenBalance(connection: Connection, d: Deployment, owner:
 
 // ───────────────────────────── historia (zdarzenia z logów) ─────────────────────────────
 
+/** Parser zdarzeń Anchora zwraca pola tak jak w IDL (snake_case: for_buyer) — ujednolicamy do camelCase. */
+const camelKeys = (o: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(o).map(([k, v]) => [k.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase()), v]));
+
 export type ChainEvent = { name: string; data: Record<string, unknown>; signature: string; time: number; signer: Address };
 
 /**
@@ -200,7 +204,7 @@ export async function accountEvents(connection: Connection, d: Deployment, accou
     if (!tx?.meta?.logMessages) return;
     const signer = tx.transaction.message.staticAccountKeys[0]?.toBase58() ?? "";
     for (const ev of parser.parseLogs(tx.meta.logMessages)) {
-      out.push({ name: ev.name, data: ev.data as Record<string, unknown>, signature: ok[i].signature, time: tx.blockTime ?? 0, signer });
+      out.push({ name: ev.name, data: camelKeys(ev.data as Record<string, unknown>), signature: ok[i].signature, time: tx.blockTime ?? 0, signer });
     }
   });
   return out.sort((a, b) => a.time - b.time);
