@@ -59,7 +59,8 @@ export default function DealPage() {
   // która na niego czeka. Wszystko, co robi, mógłby zrobić każdy; serwer ma limity częstotliwości.
   const waitsForRelay =
     !!deal &&
-    ((deal.state === State.Shipped && /^(DEMO-|\d{20,26}$)/.test(deal.tracking.trim())) ||
+    ((deal.state >= State.Funded && deal.state <= State.InArbitration && deal.deadline > 0n && w.now > deal.deadline + 5n) ||
+      (deal.state === State.Shipped && /^(DEMO-|\d{20,26}$)/.test(deal.tracking.trim())) ||
       (deal.state === State.InArbitration && !deal.panelDrawn));
   useEffect(() => {
     if (!waitsForRelay) return;

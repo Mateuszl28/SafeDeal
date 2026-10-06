@@ -3,7 +3,8 @@
 //  • oracle: numer InPost → potwierdzenie po statusie „delivered” z publicznego API InPost,
 //            numer DEMO-… → potwierdzenie 15 s po nadaniu (symulacja na prezentację),
 //  • arbitraż: losowanie składu (draw_panel), gdy tylko minie slot losowania — może to zrobić każdy,
-//    a robimy to szybko, żeby żadna strona nie przeczekała niewygodnego wyniku.
+//    a robimy to szybko, żeby żadna strona nie przeczekała niewygodnego wyniku,
+//  • po terminie: settle_expired — wynik zapisany w programie wykonuje się, nawet gdy wszyscy zniknęli.
 // Relayer nie ma żadnych uprawnień ponad te, które program daje każdemu kluczowi oracle / każdemu wywołującemu.
 import { Keypair, Transaction, type Connection } from "@solana/web3.js";
 import type { Program } from "@coral-xyz/anchor";
@@ -11,6 +12,8 @@ import { State, type Deal, type Deployment } from "./contracts";
 import { buildInstructions, fetchAllDeals, fetchDeal } from "./solana";
 
 export const DEMO_DELAY = 15;
+/** Zapas na różnicę zegara serwera i łańcucha przy rozliczaniu po terminie. */
+const CLOCK_MARGIN = 5;
 
 /** Klucze źródeł statusu (demo): ORACLE_KEYS albo oracle z NEXT_PUBLIC_DEMO_KEYS (te same klucze devnetowe). */
 export function oracleKeys(): Keypair[] {
@@ -53,23 +56,36 @@ async function sendAs(connection: Connection, ixs: Transaction["instructions"], 
   return sig;
 }
 
+const expired = (deal: Deal, now: number) =>
+  deal.state >= State.Funded && deal.state <= State.InArbitration && deal.deadline > 0n && now > Number(deal.deadline) + CLOCK_MARGIN;
+
 /** Czy transakcja czeka na relayer (żeby nie odpytywać łańcucha bez potrzeby). */
-export const needsRelay = (deal: Deal) =>
+export const needsRelay = (deal: Deal, now: number) =>
+  expired(deal, now) ||
   (deal.state === State.Shipped && /^(DEMO-|\d{20,26}$)/.test(deal.tracking.trim())) ||
   (deal.state === State.InArbitration && !deal.panelDrawn);
 
 /**
  * Jeden krok relayera dla jednej transakcji. Zwraca opis wykonanych akcji (pusty, gdy nic nie było do zrobienia).
- * `drawPayer` płaci opłatę za losowanie (sponsor opłat); oracle płacą za swoje potwierdzenia.
+ * `payer` (sponsor opłat) płaci za losowanie i rozliczenie po terminie; oracle płacą za swoje potwierdzenia.
  */
-export async function relayDeal(program: Program, d: Deployment, deal: Deal, drawPayer: Keypair | null, now: number): Promise<string[]> {
+export async function relayDeal(program: Program, d: Deployment, deal: Deal, payer: Keypair | null, now: number): Promise<string[]> {
   const connection = program.provider.connection;
   const done: string[] = [];
 
-  if (deal.state === State.InArbitration && !deal.panelDrawn && drawPayer) {
+  if (expired(deal, now)) {
+    if (!payer) return done;
+    // Odbiorca wynika wyłącznie ze stanu transakcji — relayer nie ma tu żadnego wyboru.
+    const ixs = await buildInstructions(program, d, payer.publicKey, "settleExpired", [], deal);
+    await sendAs(connection, ixs, payer);
+    done.push(`#${deal.id}: rozliczenie po terminie`);
+    return done;
+  }
+
+  if (deal.state === State.InArbitration && !deal.panelDrawn && payer) {
     if (BigInt(await connection.getSlot("confirmed")) <= deal.drawSlot) return done;
-    const ixs = await buildInstructions(program, d, drawPayer.publicKey, "drawPanel", [], deal);
-    await sendAs(connection, ixs, drawPayer);
+    const ixs = await buildInstructions(program, d, payer.publicKey, "drawPanel", [], deal);
+    await sendAs(connection, ixs, payer);
     done.push(`#${deal.id}: losowanie składu`);
     return done;
   }
@@ -102,11 +118,11 @@ export async function relayDeal(program: Program, d: Deployment, deal: Deal, dra
 }
 
 /** Przegląd wszystkich transakcji (zadanie okresowe). */
-export async function relayAll(program: Program, d: Deployment, drawPayer: Keypair | null, now: number): Promise<string[]> {
+export async function relayAll(program: Program, d: Deployment, payer: Keypair | null, now: number): Promise<string[]> {
   const out: string[] = [];
-  for (const deal of (await fetchAllDeals(program)).filter(needsRelay)) {
+  for (const deal of (await fetchAllDeals(program)).filter((x) => needsRelay(x, now))) {
     try {
-      out.push(...(await relayDeal(program, d, deal, drawPayer, now)));
+      out.push(...(await relayDeal(program, d, deal, payer, now)));
     } catch (e) {
       out.push(`#${deal.id}: ${e instanceof Error ? e.message.split("\n")[0] : e}`);
     }

@@ -2,7 +2,8 @@
 //   GET /api/relayer?deal=12  — jedna transakcja; woła ją strona transakcji, gdy ktoś ją ogląda,
 //   GET /api/relayer          — przegląd wszystkich; woła go zadanie GitHub Actions co kilka minut.
 // Endpoint jest publiczny, bo nie daje żadnej władzy: losować skład może każdy, a potwierdzenia doręczenia
-// wynikają z obiektywnego warunku (status InPost / DEMO-… po 15 s). Limity chronią przed zasypaniem RPC.
+// wynikają z obiektywnego warunku (status InPost / DEMO-… po 15 s), a rozliczenie po terminie wysyła pieniądze
+// tylko tam, gdzie każe stan transakcji. Limity chronią przed zasypaniem RPC.
 import { State } from "@/lib/contracts";
 import { fetchDeal, readProgram } from "@/lib/solana";
 import { needsRelay, relayAll, relayDeal } from "@/lib/relayer";
@@ -37,7 +38,7 @@ export async function GET(req: Request) {
   try {
     if (idParam === null) return Response.json({ done: await relayAll(program, d, sponsorKey(), now) });
     const deal = await fetchDeal(program, d, BigInt(idParam));
-    if (!deal || deal.archived || !needsRelay(deal)) return Response.json({ done: [], state: deal ? State[deal.state] : null });
+    if (!deal || deal.archived || !needsRelay(deal, now)) return Response.json({ done: [], state: deal ? State[deal.state] : null });
     return Response.json({ done: await relayDeal(program, d, deal, sponsorKey(), now) });
   } catch (e) {
     return Response.json({ message: e instanceof Error ? e.message.slice(0, 300) : String(e) }, { status: 500 });

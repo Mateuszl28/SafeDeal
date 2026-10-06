@@ -553,3 +553,4 @@ ul.plain { margin: 0; padding-left: 1.1rem; display: grid; gap: 6px; }
 .snippet pre { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; overflow-x: auto; font-size: 0.8rem; white-space: pre; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips .on { border-color: var(--accent); }
+.attempt-result small { display: block; margin-top: 4px; color: var(--muted); }

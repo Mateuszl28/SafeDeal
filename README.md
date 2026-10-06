@@ -64,7 +64,8 @@ osoba spoza transakcji.
 W aplikacji jest strona **`/jury` („Dla jury: sprawdź sam”)**: odczytany z łańcucha status upgrade authority programu
 (czy autor wciąż może zmienić kod), niezmienne reguły z konta konfiguracji oraz **„Spróbuj oszukać program”** —
 przyciski budujące prawdziwe nieuczciwe transakcje (wypłata z sejfu z pominięciem programu, zwrot „kupującemu” na
-własne konto, potwierdzenie odbioru za kupującego, rozliczenie przed terminem) i symulujące je w sieci
+własne konto, potwierdzenie odbioru za kupującego, rozliczenie przed terminem, wpisanie siebie do składu arbitrów,
+głos bez wylosowania, rent z zamkniętej transakcji na własne konto, nagroda arbitra na cudze konto) i symulujące je w sieci
 (`simulateTransaction`: ta sama walidacja, bez opłat). Widać, który program je odrzuca i z jakim błędem.
 
 Program: [`solana/programs/safedeal/src/lib.rs`](solana/programs/safedeal/src/lib.rs) (Anchor 0.32).
@@ -174,7 +175,8 @@ oracle/                          szkic źródła Chainlink Functions (InPost) z 
   „Podgląd karty” renderuje ją z tego samego endpointu tak, jak zrobi to klient Blinks (działa też bez publicznego
   adresu), a jej przycisk kupuje tą samą ścieżką.
 - **Relayer bez własnego serwera** — `GET /api/relayer?deal=<id>` (`web/lib/relayer.ts`) robi to samo co skrypt
-  relayera: potwierdza doręczenia (InPost „delivered” / `DEMO-…` po 15 s) i losuje skład arbitrów. Woła go strona
+  relayera: potwierdza doręczenia (InPost „delivered” / `DEMO-…` po 15 s), losuje skład arbitrów i po terminie
+  wywołuje `settle_expired` — transakcja rozlicza się według reguł, nawet gdy wszyscy zniknęli. Woła go strona
   transakcji, gdy ktoś ją ogląda, a co 5 minut zapasowo GitHub Actions (`.github/workflows/relayer.yml`, przegląd
   wszystkich transakcji). Endpoint jest publiczny i bez sekretów, bo nie daje żadnej władzy: losować może każdy,
   a potwierdzenia wynikają z obiektywnego warunku; limity częstotliwości chronią RPC.
