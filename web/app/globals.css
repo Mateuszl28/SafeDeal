@@ -543,3 +543,13 @@ footer { margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--border
   .receipt { background: #fff; color: #000; }
 }
 html, body { overflow-x: clip; }
+
+/* Pula arbitrów i zamknięte konta */
+ul.plain { margin: 0; padding-left: 1.1rem; display: grid; gap: 6px; }
+.archived { border-color: var(--accent-soft); }
+.gov thead th { text-align: left; font-size: 0.8rem; color: var(--muted); font-weight: 500; }
+.snippet { display: grid; gap: 6px; margin-bottom: 14px; min-width: 0; }
+.snippet-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.snippet pre { margin: 0; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; overflow-x: auto; font-size: 0.8rem; white-space: pre; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips .on { border-color: var(--accent); }

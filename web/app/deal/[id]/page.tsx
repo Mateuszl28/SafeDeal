@@ -9,7 +9,8 @@ import { dealsDone, fmtDuration, fmtUsdc, sameAddr, short } from "@/lib/format";
 import { nameOf, useWallet } from "@/lib/wallet";
 import { explorerAddr, fetchDeal, fetchProfile, pdas } from "@/lib/solana";
 import { EvidenceSection, HistorySection } from "@/components/DealActivity";
-import { ArbiterVote, VotingStatus } from "@/components/ArbiterVote";
+import { ArbiterVote, VotingStatus, onPanel } from "@/components/ArbiterVote";
+import { CloseDealPanel } from "@/components/CloseDealPanel";
 import { OraclePanel } from "@/components/OraclePanel";
 import { SettlementPanel } from "@/components/SettlementPanel";
 import { ShareQr } from "@/components/ShareQr";
@@ -55,7 +56,7 @@ export default function DealPage() {
   }, [w.deployment, w.program, w.refreshKey, id]);
 
   // Sejf transakcji — konto tokenowe należące do programu, nie do żadnej osoby.
-  const vault = w.deployment && deal ? pdas(w.deployment.programId).vault(new PublicKey(deal.pda)).toBase58() : undefined;
+  const vault = w.deployment && deal && !deal.archived ? pdas(w.deployment.programId).vault(new PublicKey(deal.pda)).toBase58() : undefined;
   useEffect(() => {
     if (!vault) return;
     w.connection
@@ -73,7 +74,7 @@ export default function DealPage() {
   const isSeller = sameAddr(me, deal.seller);
   const isBuyer = sameAddr(me, deal.buyer);
   const canBuy = s === State.Created && !isSeller && (isZero(deal.buyer) || isBuyer);
-  const isArb = w.deployment.arbiters.some((a) => sameAddr(a, me));
+  const isArb = onPanel(deal, me);
   const isPickup = !isZeroHash(deal.pickupHash);
   const stage = parseStage(deal.description);
   const delivered = deal.attestations >= w.deployment.oracleQuorum;
@@ -312,7 +313,10 @@ export default function DealPage() {
           )}
 
           {!me && <p className="muted">Połącz portfel, aby działać.</p>}
-          {me && isFinal(s) && <p className="muted">Transakcja zamknięta — nic więcej nie da się zrobić.</p>}
+          {me && isFinal(s) && <p className="muted">Transakcja zamknięta — pieniądze rozliczone.</p>}
+          {s === State.InArbitration && !deal.panelDrawn && !isBuyer && !isSeller && (
+            <p className="muted">Skład arbitrów nie jest jeszcze wylosowany — losowanie może uruchomić każdy (panel „Strony”).</p>
+          )}
           {me && !isFinal(s) && !isSeller && !isBuyer && !canBuy && !(isArb && s === State.InArbitration) && (
             <p className="muted">Nie jesteś stroną tej transakcji.{expired ? " Możesz ją jednak rozliczyć po terminie." : ""}</p>
           )}
@@ -320,6 +324,8 @@ export default function DealPage() {
       </section>
 
       <ReviewPanel id={id} deal={deal} />
+
+      <CloseDealPanel deal={deal} />
 
       <SettlementPanel id={id} deal={deal} />
 

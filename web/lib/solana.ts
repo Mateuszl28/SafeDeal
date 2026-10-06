@@ -5,11 +5,13 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
-import { Connection, PublicKey, SystemProgram, type TransactionInstruction } from "@solana/web3.js";
+import { Connection, PublicKey, SYSVAR_SLOT_HASHES_PUBKEY, SystemProgram, type TransactionInstruction } from "@solana/web3.js";
 import idlJson from "./idl/safedeal.json";
 import {
   EMPTY_PROFILE,
+  ZERO,
   type Address,
+  type ArbiterAccount,
   type ConfigAccount,
   type Deal,
   type Deployment,
@@ -44,6 +46,9 @@ export function pdas(programId: Address) {
     deal: (id: bigint) => find([Buffer.from("deal"), u64le(id)]),
     vault: (deal: PublicKey) => find([Buffer.from("vault"), deal.toBuffer()]),
     profile: (owner: Address | PublicKey) => find([Buffer.from("profile"), pk(owner).toBuffer()]),
+    pool: () => find([Buffer.from("pool")]),
+    poolVault: () => find([Buffer.from("pool_vault")]),
+    arbiter: (owner: Address | PublicKey) => find([Buffer.from("arbiter"), pk(owner).toBuffer()]),
   };
 }
 
@@ -92,6 +97,13 @@ export function toDeal(pda: PublicKey, a: any): Deal {
     pickupHash: hex(a.pickupHash),
     settlementProposer: b58(a.settlementProposer),
     settlementBuyerAmount: big(a.settlementBuyerAmount),
+    closedAt: big(a.closedAt),
+    drawSlot: big(a.drawSlot),
+    panelDrawn: a.panelDrawn,
+    panel: (a.panel as PublicKey[]).map(b58),
+    panelSettled: a.panelSettled,
+    verdict: a.verdict,
+    rewardShare: big(a.rewardShare),
     commits: (a.commits as number[][]).map(hex),
     votes: Array.from(a.votes as number[]),
     commitCount: a.commitCount,
@@ -120,14 +132,26 @@ export function toConfig(a: any): ConfigAccount {
     mint: b58(a.mint),
     oracles: a.oracles.map(b58),
     oracleQuorum: a.oracleQuorum,
-    arbiters: a.arbiters.map(b58),
     arbiterQuorum: a.arbiterQuorum,
+    arbiterStake: big(a.arbiterStake),
+    missSlash: big(a.missSlash),
     revealWindow: big(a.revealWindow),
+    archiveWindow: big(a.archiveWindow),
     bondBps: a.bondBps,
     dealCount: big(a.dealCount),
-    arbWithMajority: Array.from(a.arbWithMajority),
-    arbAgainstMajority: Array.from(a.arbAgainstMajority),
-    arbMissed: Array.from(a.arbMissed),
+  };
+}
+
+export function toArbiter(a: any): ArbiterAccount {
+  return {
+    owner: b58(a.owner),
+    stake: big(a.stake),
+    inPool: a.inPool,
+    activeCases: a.activeCases,
+    cases: a.cases,
+    withMajority: a.withMajority,
+    againstMajority: a.againstMajority,
+    missed: a.missed,
   };
 }
 
@@ -140,7 +164,71 @@ export async function fetchConfig(program: Program, d: Deployment): Promise<Conf
 export async function fetchDeal(program: Program, d: Deployment, id: bigint): Promise<Deal | null> {
   const pda = pdas(d.programId).deal(id);
   const a = await (program.account as any).deal.fetchNullable(pda);
-  return a ? toDeal(pda, a) : null;
+  if (a) return toDeal(pda, a);
+  return fetchArchivedDeal(program.provider.connection, d, id);
+}
+
+/**
+ * Transakcja, której konta zamknięto po rozliczeniu (rent wrócił do sprzedawcy). Konta już nie ma,
+ * ale historia adresu zostaje w łańcuchu — odtwarzamy ją ze zdarzenia `DealArchived`.
+ */
+export async function fetchArchivedDeal(connection: Connection, d: Deployment, id: bigint): Promise<Deal | null> {
+  const pda = pdas(d.programId).deal(id);
+  const ev = (await accountEvents(connection, d, pda.toBase58(), 60)).find((e) => e.name === "DealArchived");
+  if (!ev) return null;
+  const a = ev.data as any;
+  return {
+    id,
+    pda: b58(pda),
+    seller: b58(a.seller),
+    buyer: b58(a.buyer),
+    amount: big(a.amount),
+    bond: big(a.bond),
+    state: a.state as State,
+    deadline: 0n,
+    createdAt: big(a.createdAt),
+    title: a.title,
+    description: a.description,
+    photoUri: a.photoUri,
+    photoHash: hex(a.photoHash),
+    tracking: a.tracking,
+    disputeReason: a.disputeReason,
+    attestations: 0,
+    attestedMask: 0,
+    pickupAllowed: a.pickup,
+    // po zamknięciu wystarczy znacznik „odbiór osobisty” — samego hasha kodu zdarzenie nie przechowuje
+    pickupHash: a.pickup ? "0x" + "11".repeat(32) : hex(new Uint8Array(32)),
+    settlementProposer: ZERO,
+    settlementBuyerAmount: 0n,
+    closedAt: big(a.closedAt),
+    drawSlot: 0n,
+    panelDrawn: (a.panel as PublicKey[]).some((p) => !p.equals(PublicKey.default)),
+    panel: (a.panel as PublicKey[]).map(b58),
+    panelSettled: 0b111,
+    verdict: 0,
+    rewardShare: 0n,
+    commits: [],
+    votes: Array.from(a.votes as number[]),
+    commitCount: 0,
+    votesBuyer: (a.votes as number[]).filter((v) => v === 1).length,
+    votesSeller: (a.votes as number[]).filter((v) => v === 2).length,
+    reviewedByBuyer: true,
+    reviewedBySeller: true,
+    archived: true,
+  };
+}
+
+export async function fetchPool(program: Program): Promise<Address[]> {
+  const a = await (program.account as any).pool.fetch(pdas(program.programId.toBase58()).pool());
+  return (a.members as PublicKey[]).map(b58);
+}
+
+/** Konta arbitrów (statystyki, kaucja) — null dla adresu, który nigdy nie był w puli. */
+export async function fetchArbiters(program: Program, owners: Address[]): Promise<(ArbiterAccount | null)[]> {
+  if (owners.length === 0) return [];
+  const p = pdas(program.programId.toBase58());
+  const raw = await (program.account as any).arbiter.fetchMultiple(owners.map((o) => p.arbiter(o)));
+  return raw.map((a: any) => (a ? toArbiter(a) : null));
 }
 
 /**
@@ -215,7 +303,8 @@ export async function accountEvents(connection: Connection, d: Deployment, accou
 export type WriteName =
   | "createDeal" | "cancel" | "fund" | "markShipped" | "confirmDelivery" | "confirmReceipt" | "confirmPickup"
   | "openDispute" | "respondToDispute" | "refundBuyer" | "commitVote" | "revealVote" | "settleExpired"
-  | "submitEvidence" | "proposeSettlement" | "acceptSettlement" | "review" | "faucet";
+  | "submitEvidence" | "proposeSettlement" | "acceptSettlement" | "review" | "faucet"
+  | "drawPanel" | "closeDeal" | "joinPool" | "leavePool";
 
 const bytes32 = (h: string) => Array.from(Buffer.from(h.replace(/^0x/, "").padStart(64, "0"), "hex"));
 const bn = (v: bigint | number) => new BN(v.toString());
@@ -251,6 +340,23 @@ export async function buildInstructions(
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       }).instruction(),
+    ];
+  }
+
+  if (name === "joinPool" || name === "leavePool") {
+    const accounts = {
+      owner: signer,
+      config,
+      pool: p.pool(),
+      poolVault: p.poolVault(),
+      arbiter: p.arbiter(signer),
+      ownerAta: ata(d.mint, signer),
+      tokenProgram: TOKEN_PROGRAM_ID,
+    };
+    return [
+      name === "joinPool"
+        ? await m.joinPool(bn(args[0] as bigint)).accountsPartial({ ...accounts, systemProgram: SystemProgram.programId }).instruction()
+        : await m.leavePool().accountsPartial(accounts).instruction(),
     ];
   }
 
@@ -324,6 +430,68 @@ export async function buildInstructions(
       ];
     case "confirmDelivery":
       return [await m.confirmDelivery().accountsPartial({ oracle: signer, config, deal: dealPda }).instruction()];
+    case "drawPanel": {
+      // Skład liczymy tym samym algorytmem co program; program i tak sprawdza każdy adres.
+      const connection = program.provider.connection;
+      const sysvar = await connection.getAccountInfo(SYSVAR_SLOT_HASHES_PUBKEY, "confirmed");
+      const seed = sysvar && slotHashAtOrAfter(Buffer.from(sysvar.data), deal.drawSlot);
+      const remaining = seed
+        ? (await pickPanel(await fetchPool(program), deal.id, seed, deal.buyer, deal.seller)).map((a) => ({
+            pubkey: p.arbiter(a),
+            isSigner: false,
+            isWritable: true,
+          }))
+        : [];
+      return [
+        await m
+          .drawPanel()
+          .accountsPartial({ actor: signer, config, pool: p.pool(), deal: dealPda, slotHashes: SYSVAR_SLOT_HASHES_PUBKEY })
+          .remainingAccounts(remaining)
+          .instruction(),
+      ];
+    }
+    case "closeDeal": {
+      // Najpierw rozliczenie arbitrów ze składu (nagrody / kary), potem zamknięcie kont — jedna transakcja.
+      const ixs: TransactionInstruction[] = [];
+      if (deal.panelDrawn) {
+        for (let i = 0; i < deal.panel.length; i++) {
+          if ((deal.panelSettled >> i) & 1) continue;
+          ixs.push(
+            await m
+              .settleArbiter(i)
+              .accountsPartial({
+                actor: signer,
+                config,
+                pool: p.pool(),
+                poolVault: p.poolVault(),
+                mint,
+                deal: dealPda,
+                vault,
+                arbiter: p.arbiter(deal.panel[i]),
+                arbiterAta: ata(d.mint, deal.panel[i]),
+                tokenProgram: TOKEN_PROGRAM_ID,
+              })
+              .instruction(),
+          );
+        }
+      }
+      ixs.push(
+        ensureAta(deal.seller),
+        await m
+          .closeDeal()
+          .accountsPartial({
+            actor: signer,
+            config,
+            deal: dealPda,
+            vault,
+            seller: pk(deal.seller),
+            sellerAta: ata(d.mint, deal.seller),
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .instruction(),
+      );
+      return ixs;
+    }
     case "commitVote":
       return [
         await m.commitVote(bytes32(String(args[0]))).accountsPartial({ arbiter: signer, config, deal: dealPda }).instruction(),
@@ -370,12 +538,7 @@ export async function buildInstructions(
       return [...pre, await m.acceptSettlement(bn(args[0] as bigint)).accountsPartial(payout).instruction()];
     case "revealVote": {
       const [forBuyer, salt] = args as [boolean, string];
-      const remaining = d.arbiters.map((a) => ({ pubkey: ata(d.mint, a), isSigner: false, isWritable: true }));
-      return [
-        ...pre,
-        ...d.arbiters.map((a) => ensureAta(a)),
-        await m.revealVote(forBuyer, bytes32(salt)).accountsPartial(payout).remainingAccounts(remaining).instruction(),
-      ];
+      return [...pre, await m.revealVote(forBuyer, bytes32(salt)).accountsPartial(payout).instruction()];
     }
   }
   throw new Error(`Nieznana akcja ${name}`);
@@ -410,6 +573,31 @@ export async function codeBytes(normalizedCode: string): Promise<string> {
 /** Hash zapisywany przy wpłacie: sha256(id_le ‖ sha256(kod)) — sprawdza go confirm_pickup. */
 export async function pickupHash(id: bigint, normalizedCode: string): Promise<string> {
   return toHex(await sha256(u64le(id), fromHex(await codeBytes(normalizedCode))));
+}
+
+/** Hash najwcześniejszego slotu ≥ target z sysvaru SlotHashes (= slot_hash_at_or_after w programie). */
+export function slotHashAtOrAfter(data: Buffer, target: bigint): Uint8Array | null {
+  const n = Number(data.readBigUInt64LE(0));
+  let found: Uint8Array | null = null;
+  for (let i = 0; i < n; i++) {
+    const off = 8 + i * 40;
+    if (off + 40 > data.length) break;
+    if (data.readBigUInt64LE(off) < target) return found;
+    found = data.subarray(off + 8, off + 40);
+  }
+  return null;
+}
+
+/** Losowanie składu (= pick_panel w programie): sha256(seed ‖ id ‖ j) mod liczba kandydatów, bez powtórzeń. */
+export async function pickPanel(members: Address[], id: bigint, seed: Uint8Array, buyer: Address, seller: Address): Promise<Address[]> {
+  const cand = members.filter((m) => m !== buyer && m !== seller);
+  const out: Address[] = [];
+  for (let j = 0; j < 3; j++) {
+    if (cand.length === 0) throw new Error("W puli jest za mało arbitrów, żeby wylosować skład.");
+    const h = await sha256(seed, u64le(id), new Uint8Array([j]));
+    out.push(...cand.splice(Number(Buffer.from(h).readBigUInt64LE(0) % BigInt(cand.length)), 1));
+  }
+  return out;
 }
 
 export const randomHex32 = () => toHex(crypto.getRandomValues(new Uint8Array(32)));

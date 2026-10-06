@@ -102,9 +102,11 @@ function readableError(e: unknown, logs?: string[] | null): string {
 }
 
 const deployment = getDeployment(process.env.NEXT_PUBLIC_CLUSTER || "devnet");
-const RPC = process.env.NEXT_PUBLIC_RPC || deployment?.rpc || "https://api.devnet.solana.com";
+// Prywatny endpoint z NEXT_PUBLIC_RPC dotyczy tylko devnetu — lokalny walidator ma własny adres.
+const PRIVATE_RPC = deployment?.cluster === "devnet" ? process.env.NEXT_PUBLIC_RPC : undefined;
+const RPC = PRIVATE_RPC || deployment?.rpc || "https://api.devnet.solana.com";
 /** Część dostawców RPC (np. Alchemy) nie obsługuje subskrypcji — potwierdzenia idą wtedy przez publiczny WebSocket. */
-const WS = process.env.NEXT_PUBLIC_WS || (process.env.NEXT_PUBLIC_RPC && deployment?.cluster === "devnet" ? "wss://api.devnet.solana.com" : undefined);
+const WS = process.env.NEXT_PUBLIC_WS || (PRIVATE_RPC ? "wss://api.devnet.solana.com" : undefined);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   return (

@@ -1,19 +1,20 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Address, ConfigAccount } from "@/lib/contracts";
-import { fmtDuration, short } from "@/lib/format";
-import { explorerAddr, pdas, toConfig } from "@/lib/solana";
+import { fmtDuration, fmtUsdc, short } from "@/lib/format";
+import { explorerAddr, fetchPool, pdas, toConfig } from "@/lib/solana";
 import { nameOf, useWallet } from "@/lib/wallet";
 
 type Windows = { ship: number; transit: number; inspection: number; response: number; arbitration: number; reveal: number };
-type Rules = { cfg: ConfigAccount; windows: Windows };
+type Rules = { cfg: ConfigAccount; windows: Windows; pool: number };
 
 const names = (list: readonly Address[]) => list.map((a) => nameOf(a) ?? short(a)).join(", ");
 
 /**
  * Reguły zapisane w programie przy jego uruchomieniu. Program nie ma instrukcji administratora,
- * więc nikt — także autor — nie może ich zmienić ani podmienić arbitrów.
+ * więc nikt — także autor — nie może ich zmienić ani wybrać arbitrów (skład losuje program z otwartej puli).
  */
 export function ProgramRules() {
   const w = useWallet();
@@ -25,9 +26,11 @@ export function ProgramRules() {
     // Konto konfiguracji czytamy wprost, żeby pokazać też terminy zapisane w łańcuchu (nie tylko w pliku wdrożenia).
     (w.program.account as unknown as { config: { fetch: (k: unknown) => Promise<Record<string, unknown>> } }).config
       .fetch(pdas(d.programId).config())
-      .then((raw) => {
+      .then(async (raw) => {
         const n = (k: string, fallback: number) => (raw[k] !== undefined ? Number(String(raw[k])) : fallback);
+        const pool = await fetchPool(w.program!).then((m) => m.length).catch(() => 0);
         setRules({
+          pool,
           cfg: toConfig(raw),
           windows: {
             ship: n("shipWindow", d.windows.ship),
@@ -43,7 +46,7 @@ export function ProgramRules() {
   }, [w.deployment, w.program]);
 
   if (!w.deployment || !rules) return null;
-  const { cfg, windows } = rules;
+  const { cfg, windows, pool } = rules;
   const cluster = w.deployment.cluster;
 
   return (
@@ -58,10 +61,13 @@ export function ProgramRules() {
             </td>
           </tr>
           <tr>
-            <th>Rada arbitrów</th>
+            <th>Arbitrzy</th>
             <td>
-              rozstrzyga spory, których strony nie załatwiły same · werdykt przy {cfg.arbiterQuorum} z {cfg.arbiters.length} głosów ·{" "}
-              {names(cfg.arbiters)}
+              otwarta pula ({pool} os.) — dołączyć może każdy z kaucją min. {fmtUsdc(cfg.arbiterStake)} · do każdego sporu program losuje 3
+              osoby spoza stron · werdykt przy {cfg.arbiterQuorum} z 3 głosów · brak głosu: {fmtUsdc(cfg.missSlash)} kaucji spalone ·{" "}
+              <Link href="/arbitrzy" className="plink">
+                pula →
+              </Link>
             </td>
           </tr>
           <tr>
@@ -70,6 +76,13 @@ export function ProgramRules() {
               nadanie: {fmtDuration(windows.ship)} · dostawa: {fmtDuration(windows.transit)} · sprawdzenie paczki:{" "}
               {fmtDuration(windows.inspection)} · odpowiedź na reklamację: {fmtDuration(windows.response)} · głosowanie arbitrów:{" "}
               {fmtDuration(windows.arbitration)} + ujawnienie {fmtDuration(windows.reveal)}
+            </td>
+          </tr>
+          <tr>
+            <th>Zamykanie kont</th>
+            <td>
+              po rozliczeniu każdy może zamknąć konta transakcji — rent wraca do sprzedawcy; po {fmtDuration(Number(cfg.archiveWindow))} także
+              bez kompletu opinii
             </td>
           </tr>
           <tr>

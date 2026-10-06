@@ -11,7 +11,7 @@ export function serverDeployment(): Deployment | undefined {
 }
 
 export function serverConnection(d: Deployment): Connection {
-  const http = process.env.NEXT_PUBLIC_RPC || d.rpc;
+  const http = (d.cluster === "devnet" && process.env.NEXT_PUBLIC_RPC) || d.rpc;
   return new Connection(http, {
     commitment: "confirmed",
     // prywatne RPC (np. Alchemy) bywa bez subskrypcji — potwierdzenia przez publiczny WebSocket

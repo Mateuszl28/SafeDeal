@@ -16,8 +16,13 @@ export type Deployment = {
   config: Address;
   oracles: Address[];
   oracleQuorum: number;
-  arbiters: Address[];
+  /** Zgodnych głosów potrzebnych do werdyktu (z `panelSize`). */
   arbiterQuorum: number;
+  /** Ilu arbitrów program losuje z otwartej puli do jednego sporu. */
+  panelSize: number;
+  /** Minimalna kaucja arbitra w puli i kara za nieoddany głos (najmniejsze jednostki, jako tekst). */
+  arbiterStake: string;
+  missSlash: string;
   windows: {
     ship: number;
     transit: number;
@@ -25,6 +30,7 @@ export type Deployment = {
     response: number;
     arbitration: number;
     reveal: number;
+    archive: number;
   };
   bondBps: number;
   deployedAt?: string;
@@ -101,13 +107,38 @@ export type Deal = {
   pickupHash: string; // hex 0x…
   settlementProposer: Address;
   settlementBuyerAmount: bigint;
-  commits: string[]; // hex 0x… per arbiter (indeksy jak w konfiguracji)
+  closedAt: bigint;
+  /** Slot, którego hash wylosuje skład arbitrów. */
+  drawSlot: bigint;
+  panelDrawn: boolean;
+  /** Wylosowany skład arbitrów (puste adresy, dopóki nie wylosowano). */
+  panel: Address[];
+  /** Bity: którzy arbitrzy ze składu zostali rozliczeni. */
+  panelSettled: number;
+  /** 0 brak (ugoda), 1 kupujący, 2 sprzedawca, 3 podział po terminie. */
+  verdict: number;
+  rewardShare: bigint;
+  commits: string[]; // hex 0x… per arbiter (indeksy jak w `panel`)
   votes: number[]; // 0 brak, 1 za kupującym, 2 za sprzedawcą
   commitCount: number;
   votesBuyer: number;
   votesSeller: number;
   reviewedByBuyer: boolean;
   reviewedBySeller: boolean;
+  /** Konta transakcji są zamknięte (rent wrócił) — dane odtworzone ze zdarzenia DealArchived w historii. */
+  archived?: boolean;
+};
+
+/** Konto arbitra w otwartej puli. */
+export type ArbiterAccount = {
+  owner: Address;
+  stake: bigint;
+  inPool: boolean;
+  activeCases: number;
+  cases: number;
+  withMajority: number;
+  againstMajority: number;
+  missed: number;
 };
 
 export type Profile = {
@@ -136,14 +167,13 @@ export type ConfigAccount = {
   mint: Address;
   oracles: Address[];
   oracleQuorum: number;
-  arbiters: Address[];
   arbiterQuorum: number;
+  arbiterStake: bigint;
+  missSlash: bigint;
   revealWindow: bigint;
+  archiveWindow: bigint;
   bondBps: number;
   dealCount: bigint;
-  arbWithMajority: number[];
-  arbAgainstMajority: number[];
-  arbMissed: number[];
 };
 
 export const ZERO_HASH = "0x" + "00".repeat(32);

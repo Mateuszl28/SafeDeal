@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { isZeroHash, type ConfigAccount, type Deal } from "@/lib/contracts";
-import { fmtDuration, sameAddr } from "@/lib/format";
-import { fetchConfig, randomHex32, voteCommitment } from "@/lib/solana";
+import { isZeroHash, type ArbiterAccount, type Deal } from "@/lib/contracts";
+import { fmtDuration, sameAddr, short } from "@/lib/format";
+import { fetchArbiters, randomHex32, voteCommitment } from "@/lib/solana";
 import { nameOf, useWallet } from "@/lib/wallet";
 
 type Saved = { forBuyer: boolean; salt: string };
@@ -28,35 +29,72 @@ function save(key: string, v: Saved) {
   }
 }
 
+/** Czy adres jest w wylosowanym składzie tej sprawy. */
+export const onPanel = (deal: Deal, addr?: string) => deal.panelDrawn && deal.panel.some((a) => sameAddr(a, addr));
+
 /** Stan głosowania widoczny dla wszystkich: ile głosów złożono i w jakiej fazie jesteśmy. */
 export function useVotingStatus(deal: Deal) {
   const w = useWallet();
-  const arbiterCount = w.deployment?.arbiters.length ?? 0;
+  const panelSize = w.deployment?.panelSize ?? 3;
   const commitEnd = deal.deadline - BigInt(w.deployment?.windows.reveal ?? 0);
-  const revealOpen = deal.commitCount >= arbiterCount || w.now > commitEnd;
-  return { commits: deal.commitCount, revealOpen, commitEnd, arbiterCount, quorum: w.deployment?.arbiterQuorum ?? 0 };
+  const revealOpen = deal.commitCount >= panelSize || w.now > commitEnd;
+  return { commits: deal.commitCount, revealOpen, commitEnd, panelSize, quorum: w.deployment?.arbiterQuorum ?? 0 };
+}
+
+/** Losowanie składu: do slotu `drawSlot` nikt nie zna wyniku; potem pchnąć je może każdy. */
+function PanelDraw({ deal }: { deal: Deal }) {
+  const w = useWallet();
+  const [slot, setSlot] = useState<bigint>();
+
+  useEffect(() => {
+    w.connection
+      .getSlot("confirmed")
+      .then((s) => setSlot(BigInt(s)))
+      .catch(() => {});
+  }, [w.connection, w.refreshKey]);
+
+  const ready = slot !== undefined && slot > deal.drawSlot;
+  return (
+    <div className="voting">
+      <small className="muted">
+        Skład 3 arbitrów wylosuje program z otwartej puli — źródłem losowości jest hash slotu <span className="mono">{String(deal.drawSlot)}</span>,
+        który powstał dopiero po przyjęciu sporu, więc nikt (także strony) nie mógł go przewidzieć ani wybrać arbitrów. Strony sporu
+        nie mogą trafić do składu. <Link href="/arbitrzy" className="plink">Pula arbitrów →</Link>
+      </small>
+      {w.address ? (
+        <button className="btn" disabled={!!w.busy || !ready} onClick={() => w.write("drawPanel", [], { deal, label: "Wylosowano skład arbitrów" })}>
+          {ready ? "Losuj skład arbitrów" : "Czekamy na slot losowania…"}
+        </button>
+      ) : (
+        <small className="muted">Losowanie może uruchomić każdy — także relayer, który robi to automatycznie.</small>
+      )}
+    </div>
+  );
 }
 
 export function VotingStatus({ deal }: { id?: bigint; deal: Deal }) {
   const w = useWallet();
   const v = useVotingStatus(deal);
-  const arbiters = w.deployment?.arbiters ?? [];
-  const [cfg, setCfg] = useState<ConfigAccount>();
+  const [stats, setStats] = useState<(ArbiterAccount | null)[]>([]);
 
   useEffect(() => {
-    if (!w.deployment || !w.program) return;
-    fetchConfig(w.program, w.deployment)
-      .then(setCfg)
+    if (!w.program || !deal.panelDrawn) return;
+    fetchArbiters(w.program, deal.panel)
+      .then(setStats)
       .catch(() => {});
-  }, [w.deployment, w.program, w.refreshKey]);
+  }, [w.program, w.refreshKey, deal.panelDrawn, deal.panel]);
+
+  if (!deal.panelDrawn) return <PanelDraw deal={deal} />;
 
   return (
     <div className="voting">
-      <small className="muted">Sprawę rozstrzyga stała rada {arbiters.length} arbitrów. Decyduje {v.quorum} zgodnych głosów.</small>
+      <small className="muted">
+        Sprawę rozstrzyga {v.panelSize} arbitrów wylosowanych z otwartej puli. Decyduje {v.quorum} zgodnych głosów.
+      </small>
       <div className={`phase ${!v.revealOpen ? "on" : "done"}`}>
         <b>Faza 1 · niejawne głosy</b>
         <span>
-          {v.commits}/{v.arbiterCount} złożonych
+          {v.commits}/{v.panelSize} złożonych
           {!v.revealOpen && v.commitEnd > w.now && <> · zostało {fmtDuration(v.commitEnd - w.now)}</>}
         </span>
       </div>
@@ -70,21 +108,19 @@ export function VotingStatus({ deal }: { id?: bigint; deal: Deal }) {
         Do końca fazy 1 w blockchainie widać tylko odciski (hashe) głosów — żaden arbiter nie wie, jak głosowali inni.
       </small>
       <ul className="arb-stats">
-        {arbiters.map((a, i) => (
+        {deal.panel.map((a, i) => (
           <li key={a}>
             <span>
-              {nameOf(a) ?? a.slice(0, 8)}{" "}
+              <Link href={`/u/${a}`} className="plink">
+                {nameOf(a) ?? short(a)}
+              </Link>{" "}
               <small className="muted">
-                {deal.votes[i]
-                  ? "· głos ujawniony"
-                  : !isZeroHash(deal.commits[i])
-                    ? "· głos złożony"
-                    : "· jeszcze nie głosował"}
+                {deal.votes[i] ? "· głos ujawniony" : !isZeroHash(deal.commits[i]) ? "· głos złożony" : "· jeszcze nie głosował"}
               </small>
             </span>
-            {cfg && (
+            {stats[i] && (
               <span className="muted" title="zgodnie z werdyktem · przeciw · nieobecny">
-                ✓ {cfg.arbWithMajority[i] ?? 0} · ✗ {cfg.arbAgainstMajority[i] ?? 0} · ∅ {cfg.arbMissed[i] ?? 0}
+                ✓ {stats[i]!.withMajority} · ✗ {stats[i]!.againstMajority} · ∅ {stats[i]!.missed}
               </span>
             )}
           </li>
@@ -94,12 +130,12 @@ export function VotingStatus({ deal }: { id?: bigint; deal: Deal }) {
   );
 }
 
-export function ArbiterVote({ id, deal }: { id: bigint; deal: Deal; arbiterCount?: number }) {
+export function ArbiterVote({ id, deal }: { id: bigint; deal: Deal }) {
   const w = useWallet();
   const v = useVotingStatus(deal);
   const [saved, setSaved] = useState<Saved | null>(null);
 
-  const idx = w.deployment?.arbiters.findIndex((a) => sameAddr(a, w.address)) ?? -1;
+  const idx = deal.panelDrawn ? deal.panel.findIndex((a) => sameAddr(a, w.address)) : -1;
   const key = w.deployment && w.address ? storageKey(w.deployment.programId, id, w.address) : "";
 
   useEffect(() => {
@@ -129,10 +165,13 @@ export function ArbiterVote({ id, deal }: { id: bigint; deal: Deal; arbiterCount
   if (revealed) return <p className="muted">Twój głos ({side(revealed === 1)}) jest ujawniony i policzony.</p>;
 
   if (!committed) {
-    if (v.revealOpen) return <p className="muted">Faza niejawnych głosów minęła — nie oddałeś głosu.</p>;
+    if (v.revealOpen) return <p className="muted">Faza niejawnych głosów minęła — nie oddałeś głosu (część kaucji zostanie spalona).</p>;
     return (
       <>
-        <p className="muted small">Twój wybór trafi do blockchaina jako odcisk (hash) — inni arbitrzy go nie zobaczą.</p>
+        <p className="muted small">
+          Zostałeś wylosowany do tej sprawy. Twój wybór trafi do blockchaina jako odcisk (hash) — inni arbitrzy go nie zobaczą. Brak głosu
+          kosztuje część kaucji.
+        </p>
         <div className="inline">
           <button className="btn" disabled={!!w.busy} onClick={() => commit(true)}>
             Rację ma kupujący
@@ -148,7 +187,7 @@ export function ArbiterVote({ id, deal }: { id: bigint; deal: Deal; arbiterCount
   if (!v.revealOpen) {
     return (
       <p className="muted">
-        Głos złożony{saved ? ` (${side(saved.forBuyer)})` : ""} — czekamy na pozostałych arbitrów ({v.commits}/{v.arbiterCount}).
+        Głos złożony{saved ? ` (${side(saved.forBuyer)})` : ""} — czekamy na pozostałych arbitrów ({v.commits}/{v.panelSize}).
       </p>
     );
   }

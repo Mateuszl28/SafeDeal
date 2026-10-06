@@ -116,8 +116,13 @@ export function DemoGuide() {
           actor: seller,
         });
       if (s === State.InArbitration) {
-        const revealOpen = d.commitCount >= dep.arbiters.length || w.now > d.deadline - BigInt(dep.windows.reveal);
-        for (const [i, a] of dep.arbiters.entries()) {
+        if (!d.panelDrawn)
+          return setStep({
+            title: "Program losuje skład arbitrów",
+            hint: "Kliknij „Losuj skład arbitrów” (może to zrobić każdy, także relayer). Wynik zależy od hasha slotu, który powstał dopiero po przyjęciu sporu — strony nie wybierają arbitrów. W historii pojawi się wpis z wylosowanym składem.",
+          });
+        const revealOpen = d.commitCount >= dep.panelSize || w.now > d.deadline - BigInt(dep.windows.reveal);
+        for (const [i, a] of d.panel.entries()) {
           const arb = byAddress(a);
           if (!arb) continue;
           const committed = !isZeroHash(d.commits[i]);
@@ -139,7 +144,9 @@ export function DemoGuide() {
       if (isFinal(s))
         return setStep({
           title: "Transakcja zamknięta",
-          hint: `Strony mogą teraz wystawić sobie opinie — raz, zapisane na stałe. Pokaż „Historię transakcji”, „Potwierdzenie (PDF)” i stronę „Statystyki”. ${EXPLORER}`,
+          hint: d.archived
+            ? `Konta zamknięte, rent wrócił do sprzedawcy — strona nadal działa, bo opis jest w historii łańcucha. ${EXPLORER}`
+            : `Strony mogą teraz wystawić sobie opinie — raz, zapisane na stałe. Na koniec „Zamknij konta i zwróć rent sprzedawcy” (może każdy). Pokaż „Historię transakcji” i „Potwierdzenie (PDF)”. ${EXPLORER}`,
         });
     })().catch(() => setStep(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps

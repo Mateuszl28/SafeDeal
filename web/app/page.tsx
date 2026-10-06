@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { uploadFile } from "@/lib/files";
 import { Pln } from "@/lib/pln";
 import { State, ZERO_HASH } from "@/lib/contracts";
@@ -26,6 +26,30 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"new" | "cheap" | "expensive">("new");
   const [kind, setKind] = useState<"item" | "project">("item");
+  const [fromListing, setFromListing] = useState<string>();
+
+  // „Sprzedaj przez SafeDeal” z serwisu z ogłoszeniami (widget.js): ?tytul=&cena=&opis=&zrodlo= wypełnia formularz.
+  // Nic nie jest wysyłane bez kliknięcia „Utwórz ofertę” — sprzedawca widzi i może poprawić każde pole.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const t = q.get("tytul");
+    if (!t) return;
+    setKind("item");
+    setTitle(t.slice(0, 80));
+    const cena = q.get("cena");
+    if (cena && /^\d+([.,]\d{1,6})?$/.test(cena.trim())) setPrice(cena.trim());
+    const src = q.get("zrodlo");
+    const safeSrc = src && /^https?:\/\//.test(src) ? src : "";
+    const opis = (q.get("opis") ?? "").trim();
+    setDescription([opis, safeSrc ? `Ogłoszenie: ${safeSrc}` : ""].filter(Boolean).join("\n").slice(0, 480));
+    if (safeSrc) {
+      try {
+        setFromListing(new URL(safeSrc).hostname);
+      } catch {
+        /* zły adres — pomijamy */
+      }
+    } else setFromListing("ogłoszenia");
+  }, []);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -68,8 +92,7 @@ export default function Home() {
     }
   }
 
-  const isCouncil = !!w.deployment?.arbiters.some((a) => sameAddr(a, w.address));
-  const cases = isCouncil ? deals.filter((d) => d.state === State.InArbitration) : [];
+  const cases = deals.filter((d) => d.state === State.InArbitration && d.panelDrawn && d.panel.some((a) => sameAddr(a, w.address)));
   const isArbiter = cases.length > 0;
   const mine = deals.filter((d) => sameAddr(d.seller, w.address) || sameAddr(d.buyer, w.address));
   const q = query.trim().toLowerCase();
@@ -95,8 +118,13 @@ export default function Home() {
         </ol>
       </section>
 
-      <section className="card">
+      <section className="card" id="nowa-oferta">
         <h2>Nowa oferta</h2>
+        {fromListing && (
+          <p className="muted small">
+            Dane z ogłoszenia ({fromListing}) — sprawdź je przed wystawieniem. Po wystawieniu wklej link do oferty SafeDeal w ogłoszeniu.
+          </p>
+        )}
         <div className="form-tabs" role="tablist" aria-label="Rodzaj oferty">
           <button type="button" role="tab" aria-selected={kind === "item"} className={kind === "item" ? "on" : ""} onClick={() => setKind("item")}>
             Przedmiot
@@ -159,7 +187,7 @@ export default function Home() {
       )}
 
       {isArbiter && (
-        <DealList title="Sprawy czekające na radę arbitrów" rows={cases} empty="Żaden spór nie czeka na Twój głos." />
+        <DealList title="Sprawy, do których Cię wylosowano" rows={cases} empty="Żaden spór nie czeka na Twój głos." />
       )}
       <DealList title="Moje transakcje" rows={mine} empty="Nie masz jeszcze transakcji." />
       <section className="card wide search-card">

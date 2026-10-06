@@ -28,6 +28,8 @@ export function Header() {
             <span className="brand-mark">◆</span> SafeDeal
           </Link>
           <Link href="/">Oferty</Link>
+          <Link href="/arbitrzy">Arbitrzy</Link>
+          <Link href="/wtyczka">Wtyczka</Link>
           <Link href="/stats">Statystyki</Link>
           <Link href="/jury">Dla jury</Link>
           {w.address && <Link href={`/u/${w.address}`}>Mój profil</Link>}

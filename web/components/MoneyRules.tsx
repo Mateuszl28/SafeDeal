@@ -23,7 +23,7 @@ export function MoneyRules({ deal, vaultBalance }: { deal: Deal; vaultBalance?: 
   const q = w.deployment?.oracleQuorum ?? 2;
   const n = w.deployment?.oracles.length ?? 3;
   const aq = w.deployment?.arbiterQuorum ?? 2;
-  const an = w.deployment?.arbiters.length ?? 3;
+  const an = w.deployment?.panelSize ?? 3;
 
   const toSeller: Path[] = [];
   const toBuyer: Path[] = [];
@@ -51,7 +51,7 @@ export function MoneyRules({ deal, vaultBalance }: { deal: Deal; vaultBalance?: 
   } else if (s === State.Disputed) {
     toBuyer.push({ text: `${seller} nie odpowie na reklamację przed terminem — rozliczyć może wtedy każdy`, fn: "settle_expired", anyone: true, when: deal.deadline });
     toBuyer.push({ text: `${seller} uzna reklamację`, fn: "refund_buyer" });
-    toSeller.push({ text: `tylko przez arbitraż: ${seller} wpłaca kaucję, a ${aq} z ${an} arbitrów przyzna mu rację`, fn: "respond_to_dispute → reveal_vote" });
+    toSeller.push({ text: `tylko przez arbitraż: ${seller} wpłaca kaucję, a ${aq} z ${an} arbitrów wylosowanych z otwartej puli przyzna mu rację`, fn: "respond_to_dispute → reveal_vote" });
     split.push({ text: "obie strony zgodzą się na tę samą kwotę ugody", fn: "propose / accept_settlement" });
   } else if (s === State.InArbitration) {
     toSeller.push({ text: `${aq} z ${an} arbitrów ujawni głos za sprzedawcą`, fn: "reveal_vote" });
@@ -67,8 +67,12 @@ export function MoneyRules({ deal, vaultBalance }: { deal: Deal; vaultBalance?: 
       <h2>{final ? "Kto ruszył te pieniądze?" : "Kto może teraz ruszyć te pieniądze?"}</h2>
       {final ? (
         <p>
-          Nikt nie musiał niczego „zatwierdzać”. Program wypłacił środki, gdy spełnił się zapisany warunek — sejf jest
-          teraz pusty{vaultBalance !== undefined ? ` (${fmtUsdc(vaultBalance)})` : ""}.
+          Nikt nie musiał niczego „zatwierdzać”. Program wypłacił środki, gdy spełnił się zapisany warunek
+          {vaultBalance !== undefined && vaultBalance > 0n
+            ? ` — w sejfie zostały tylko nagrody arbitrów (${fmtUsdc(vaultBalance)}), które program wyśle im przy rozliczeniu arbitrów.`
+            : deal.archived
+              ? " — sejf został już zamknięty."
+              : ` — sejf jest teraz pusty${vaultBalance !== undefined ? ` (${fmtUsdc(vaultBalance)})` : ""}.`}
         </p>
       ) : (
         <>
@@ -86,6 +90,7 @@ export function MoneyRules({ deal, vaultBalance }: { deal: Deal; vaultBalance?: 
       <ul className="nobody">
         <li>✗ {seller} nie wypłaci sobie pieniędzy przed spełnieniem warunku</li>
         <li>✗ {buyer} nie cofnie wpłaty jak przelewu</li>
+        {deal.bond > 0n && <li>✗ żadna ze stron nie wybiera arbitrów — skład losuje program z otwartej puli</li>}
         <li>
           ✗ autorzy SafeDeal też nie — program nie ma instrukcji administratora, a reguły zapisano raz przy wdrożeniu{" "}
           {w.deployment && (

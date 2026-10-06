@@ -26,13 +26,14 @@ export const useNotifications = () => {
 const who = (a: Address) => nameOf(a) ?? short(a);
 
 /** Co pamiętamy o każdej transakcji, żeby zauważyć zmianę przy następnym odczycie. */
-type Snap = { state: number; proposer: string; offer: string; rb: boolean; rs: boolean };
+type Snap = { state: number; proposer: string; offer: string; rb: boolean; rs: boolean; drawn: boolean };
 const snap = (d: Deal): Snap => ({
   state: d.state,
   proposer: d.settlementProposer,
   offer: String(d.settlementBuyerAmount),
   rb: d.reviewedByBuyer,
   rs: d.reviewedBySeller,
+  drawn: d.panelDrawn,
 });
 
 /** Jak często sprawdzamy zmiany — publiczny serwer devnetu ma limity zapytań. */
@@ -97,7 +98,6 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!w.deployment || !w.program || busy.current || !storeKey || loaded !== storeKey) return;
     const program = w.program;
-    const council = w.deployment.arbiters;
     busy.current = true;
     (async () => {
       const deals = await fetchAllDeals(program);
@@ -140,8 +140,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
               push(d.seller, d.id, k, `Reklamacja do ${t}: „${d.disputeReason}”`);
               break;
             case State.InArbitration:
-              push(d.buyer, d.id, k, `Reklamacja do ${t} odrzucona — decydują arbitrzy`);
-              for (const arb of council) push(arb, d.id, k, `Nowa sprawa do rozstrzygnięcia: ${t}`);
+              push(d.buyer, d.id, k, `Reklamacja do ${t} odrzucona — program losuje arbitrów`);
               break;
             default:
               if (isFinal(d.state)) {
@@ -159,6 +158,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
             `${d.id}:offer:${now.offer}:${now.proposer}`,
             `${who(now.proposer)} proponuje ugodę w ${t}: ${fmtUsdc(d.settlementBuyerAmount)} dla kupującego`,
           );
+        }
+        if (before && !before.drawn && now.drawn) {
+          for (const arb of d.panel) push(arb, d.id, `${d.id}:panel`, `Wylosowano Cię do sprawy ${t} — oddaj niejawny głos`);
         }
         if (before && !before.rb && now.rb) push(d.seller, d.id, `${d.id}:review:b`, `${who(d.buyer)} wystawia Ci opinię za ${t}`);
         if (before && !before.rs && now.rs) push(d.buyer, d.id, `${d.id}:review:s`, `${who(d.seller)} wystawia Ci opinię za ${t}`);

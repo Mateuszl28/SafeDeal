@@ -1,5 +1,5 @@
 {
-  "address": "B7aMTf719JpBybXggkHyFsAKemfM6eNbAU6mA7rUzJmn",
+  "address": "Eo9CXiAbBVBE5megSiY8H67c91qP3BZ8NjWgQvu9EzRZ",
   "metadata": {
     "name": "safedeal",
     "version": "0.1.0",
@@ -30,7 +30,6 @@
         },
         {
           "name": "config",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -222,9 +221,112 @@
       "args": []
     },
     {
+      "name": "close_deal",
+      "docs": [
+        "Porządki po rozliczeniu (może wywołać każdy): zamyka sejf i konto transakcji, a rent wraca do",
+        "sprzedawcy, który za nie zapłacił — adres jest przypięty, wywołujący nie może go podmienić.",
+        "Warunki: transakcja zamknięta, arbitrzy rozliczeni, obie opinie wystawione albo minęło okno",
+        "na opinie. Pełny opis zostaje w zdarzeniu `DealArchived` (historia łańcucha)."
+      ],
+      "discriminator": [
+        157,
+        173,
+        33,
+        216,
+        146,
+        16,
+        65,
+        82
+      ],
+      "accounts": [
+        {
+          "name": "actor",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "deal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "deal.id",
+                "account": "Deal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "deal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seller",
+          "writable": true,
+          "relations": [
+            "deal"
+          ]
+        },
+        {
+          "name": "seller_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "commit_vote",
       "docs": [
-        "Faza 1: arbiter zapisuje tylko hash głosu = sha256(id_le ‖ arbiter ‖ za_kupującym ‖ sól).",
+        "Faza 1: arbiter ze składu zapisuje tylko hash głosu = sha256(id_le ‖ arbiter ‖ za_kupującym ‖ sól).",
         "Nikt — także inni arbitrzy — nie wie, jak zagłosował, więc nie da się dopasować do większości."
       ],
       "discriminator": [
@@ -382,7 +484,6 @@
         },
         {
           "name": "config",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -540,7 +641,6 @@
         },
         {
           "name": "config",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -786,6 +886,93 @@
           }
         }
       ]
+    },
+    {
+      "name": "draw_panel",
+      "docs": [
+        "Losuje 3 arbitrów z puli (bez stron sporu). Źródło losowości: hash pierwszego slotu ≥",
+        "`draw_slot` z sysvaru SlotHashes — nieznany w chwili, gdy sprzedawca przyjął spór.",
+        "Może wywołać każdy. `remaining_accounts` = konta wylosowanych arbitrów w kolejności losowania",
+        "(klient liczy je tym samym algorytmem); program sprawdza każdy adres.",
+        "Gdy slot wypadł już z historii (~3 min), losowanie przesuwa się na nowy przyszły slot."
+      ],
+      "discriminator": [
+        220,
+        133,
+        115,
+        121,
+        118,
+        184,
+        138,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "actor",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "deal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "deal.id",
+                "account": "Deal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "faucet",
@@ -1098,7 +1285,8 @@
     {
       "name": "initialize",
       "docs": [
-        "Jednorazowo zapisuje reguły gry. Nie ma instrukcji, która mogłaby je zmienić."
+        "Jednorazowo zapisuje reguły gry i zakłada pustą pulę arbitrów. Nie ma instrukcji, która",
+        "mogłaby je zmienić."
       ],
       "discriminator": [
         175,
@@ -1136,7 +1324,54 @@
           }
         },
         {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool_vault",
+          "docs": [
+            "Sejf kaucji arbitrów — właścicielem jest PDA puli, nie człowiek."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
           "name": "system_program",
@@ -1153,6 +1388,246 @@
           }
         }
       ]
+    },
+    {
+      "name": "join_pool",
+      "docs": [
+        "Każdy może zostać arbitrem: wpłaca kaucję do sejfu puli. Kaucja to koszt wejścia (przejęcie",
+        "składu wymaga wielu kaucji) i zabezpieczenie na wypadek nieobecności."
+      ],
+      "discriminator": [
+        14,
+        65,
+        62,
+        16,
+        116,
+        17,
+        195,
+        107
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "arbiter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  98,
+                  105,
+                  116,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "stake",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "leave_pool",
+      "docs": [
+        "Arbiter wychodzi z puli i odbiera kaucję — tylko gdy nie ma żadnej nierozliczonej sprawy."
+      ],
+      "discriminator": [
+        249,
+        99,
+        213,
+        170,
+        247,
+        191,
+        36,
+        115
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "arbiter"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "arbiter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  98,
+                  105,
+                  116,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
     },
     {
       "name": "mark_shipped",
@@ -1387,7 +1862,6 @@
         },
         {
           "name": "config",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -1516,7 +1990,9 @@
     {
       "name": "respond_to_dispute",
       "docs": [
-        "Sprzedawca idzie do arbitrażu: wpłaca taką samą kaucję jak kupujący."
+        "Sprzedawca idzie do arbitrażu: wpłaca taką samą kaucję jak kupujący. Skład arbitrów zostanie",
+        "wylosowany z hasha slotu, który jeszcze nie istnieje (`draw_slot`) — strona nie może dobrać",
+        "momentu wywołania tak, żeby trafić na „swoich” arbitrów."
       ],
       "discriminator": [
         212,
@@ -1609,10 +2085,9 @@
     {
       "name": "reveal_vote",
       "docs": [
-        "Faza 2: ujawnienie głosu. Otwiera się, gdy wszyscy złożyli głosy albo minęła faza 1.",
-        "Gdy jedna strona zbierze kworum, program od razu wypłaca: zwycięzca dostaje kwotę i swoją",
-        "kaucję, kaucja przegranego trafia do arbitrów, którzy głosowali za zwycięzcą.",
-        "`remaining_accounts` = konta tokenowe arbitrów w kolejności z konfiguracji."
+        "Faza 2: ujawnienie głosu. Otwiera się, gdy cały skład złożył głosy albo minęła faza 1.",
+        "Gdy jedna strona zbierze kworum, program od razu wypłaca zwycięzcy kwotę i jego kaucję;",
+        "kaucja przegranego czeka w sejfie na arbitrów, którzy głosowali za zwycięzcą (`settle_arbiter`)."
       ],
       "discriminator": [
         100,
@@ -1631,7 +2106,6 @@
         },
         {
           "name": "config",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -1852,6 +2326,178 @@
       ]
     },
     {
+      "name": "settle_arbiter",
+      "docs": [
+        "Rozliczenie jednego arbitra ze składu po zamknięciu sporu (może wywołać każdy): nagroda z kaucji",
+        "przegranego dla głosujących za zwycięzcą, kara (spalenie części kaucji) dla nieobecnych,",
+        "statystyki rzetelności i zwolnienie sprawy, żeby arbiter mógł wyjść z puli."
+      ],
+      "discriminator": [
+        129,
+        61,
+        223,
+        149,
+        41,
+        31,
+        179,
+        28
+      ],
+      "accounts": [
+        {
+          "name": "actor",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "writable": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "deal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "deal.id",
+                "account": "Deal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "deal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "arbiter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  114,
+                  98,
+                  105,
+                  116,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "arbiter.owner",
+                "account": "Arbiter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "arbiter_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "settle_expired",
       "docs": [
         "Każdy może \"pchnąć\" transakcję po upływie terminu. Wynik zależy tylko od stanu:",
@@ -1875,7 +2521,6 @@
         },
         {
           "name": "config",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -2068,6 +2713,19 @@
   ],
   "accounts": [
     {
+      "name": "Arbiter",
+      "discriminator": [
+        73,
+        85,
+        239,
+        61,
+        111,
+        43,
+        95,
+        83
+      ]
+    },
+    {
       "name": "Config",
       "discriminator": [
         155,
@@ -2094,6 +2752,19 @@
       ]
     },
     {
+      "name": "Pool",
+      "discriminator": [
+        241,
+        154,
+        109,
+        4,
+        17,
+        177,
+        109,
+        188
+      ]
+    },
+    {
       "name": "Profile",
       "discriminator": [
         184,
@@ -2109,6 +2780,45 @@
   ],
   "events": [
     {
+      "name": "ArbiterJoined",
+      "discriminator": [
+        81,
+        39,
+        79,
+        15,
+        241,
+        156,
+        239,
+        142
+      ]
+    },
+    {
+      "name": "ArbiterLeft",
+      "discriminator": [
+        242,
+        81,
+        24,
+        126,
+        233,
+        252,
+        97,
+        220
+      ]
+    },
+    {
+      "name": "ArbiterSettled",
+      "discriminator": [
+        1,
+        172,
+        182,
+        188,
+        43,
+        175,
+        139,
+        30
+      ]
+    },
+    {
       "name": "ArbitrationStarted",
       "discriminator": [
         102,
@@ -2119,6 +2829,19 @@
         213,
         117,
         131
+      ]
+    },
+    {
+      "name": "DealArchived",
+      "discriminator": [
+        178,
+        10,
+        61,
+        111,
+        8,
+        210,
+        91,
+        58
       ]
     },
     {
@@ -2213,6 +2936,19 @@
       ]
     },
     {
+      "name": "DrawRescheduled",
+      "discriminator": [
+        135,
+        195,
+        70,
+        67,
+        122,
+        60,
+        152,
+        203
+      ]
+    },
+    {
       "name": "Evidence",
       "discriminator": [
         187,
@@ -2223,6 +2959,19 @@
         140,
         219,
         181
+      ]
+    },
+    {
+      "name": "PanelDrawn",
+      "discriminator": [
+        165,
+        19,
+        185,
+        162,
+        177,
+        32,
+        193,
+        198
       ]
     },
     {
@@ -2344,9 +3093,141 @@
       "code": 6007,
       "name": "OfferMismatch",
       "msg": "Propozycja ugody właśnie się zmieniła — sprawdź nową kwotę."
+    },
+    {
+      "code": 6008,
+      "name": "DrawNotReady",
+      "msg": "Losowanie arbitrów będzie możliwe za chwilę (czekamy na przyszły slot)."
+    },
+    {
+      "code": 6009,
+      "name": "PoolTooSmall",
+      "msg": "W puli jest za mało arbitrów, żeby wylosować skład."
+    },
+    {
+      "code": 6010,
+      "name": "PoolFull",
+      "msg": "Pula arbitrów jest pełna."
+    },
+    {
+      "code": 6011,
+      "name": "ArbiterBusy",
+      "msg": "Arbiter ma nierozliczone sprawy."
+    },
+    {
+      "code": 6012,
+      "name": "ArbitersNotSettled",
+      "msg": "Najpierw trzeba rozliczyć arbitrów tej sprawy."
     }
   ],
   "types": [
+    {
+      "name": "Arbiter",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "stake",
+            "type": "u64"
+          },
+          {
+            "name": "in_pool",
+            "type": "bool"
+          },
+          {
+            "name": "active_cases",
+            "docs": [
+              "Wylosowane, jeszcze nierozliczone sprawy — do zera nie można wyjść z puli."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "cases",
+            "type": "u32"
+          },
+          {
+            "name": "with_majority",
+            "type": "u32"
+          },
+          {
+            "name": "against_majority",
+            "type": "u32"
+          },
+          {
+            "name": "missed",
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ArbiterJoined",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "arbiter",
+            "type": "pubkey"
+          },
+          {
+            "name": "stake",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ArbiterLeft",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "arbiter",
+            "type": "pubkey"
+          },
+          {
+            "name": "stake",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ArbiterSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "arbiter",
+            "type": "pubkey"
+          },
+          {
+            "name": "reward",
+            "type": "u64"
+          },
+          {
+            "name": "slashed",
+            "type": "u64"
+          },
+          {
+            "name": "removed",
+            "type": "bool"
+          }
+        ]
+      }
+    },
     {
       "name": "ArbitrationStarted",
       "type": {
@@ -2359,6 +3240,10 @@
           {
             "name": "deadline",
             "type": "i64"
+          },
+          {
+            "name": "draw_slot",
+            "type": "u64"
           }
         ]
       }
@@ -2383,14 +3268,25 @@
             "type": "u8"
           },
           {
-            "name": "arbiters",
-            "type": {
-              "vec": "pubkey"
-            }
+            "name": "arbiter_quorum",
+            "docs": [
+              "Ile zgodnych głosów (z `PANEL`) rozstrzyga spór."
+            ],
+            "type": "u8"
           },
           {
-            "name": "arbiter_quorum",
-            "type": "u8"
+            "name": "arbiter_stake",
+            "docs": [
+              "Minimalna kaucja arbitra w puli."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "miss_slash",
+            "docs": [
+              "Kara (spalana z kaucji) za nieoddanie głosu w wylosowanej sprawie."
+            ],
+            "type": "u64"
           },
           {
             "name": "ship_window",
@@ -2417,42 +3313,19 @@
             "type": "i64"
           },
           {
+            "name": "archive_window",
+            "docs": [
+              "Po tym czasie od zamknięcia konta transakcji można zamknąć bez kompletu opinii."
+            ],
+            "type": "i64"
+          },
+          {
             "name": "bond_bps",
             "type": "u16"
           },
           {
             "name": "deal_count",
             "type": "u64"
-          },
-          {
-            "name": "arb_with_majority",
-            "docs": [
-              "Rzetelność arbitrów (indeksy jak w `arbiters`): zgodność z werdyktem i obecność."
-            ],
-            "type": {
-              "array": [
-                "u32",
-                5
-              ]
-            }
-          },
-          {
-            "name": "arb_against_majority",
-            "type": {
-              "array": [
-                "u32",
-                5
-              ]
-            }
-          },
-          {
-            "name": "arb_missed",
-            "type": {
-              "array": [
-                "u32",
-                5
-              ]
-            }
           },
           {
             "name": "bump",
@@ -2545,6 +3418,10 @@
             "type": "i64"
           },
           {
+            "name": "closed_at",
+            "type": "i64"
+          },
+          {
             "name": "title",
             "type": "string"
           },
@@ -2603,6 +3480,33 @@
             "type": "u64"
           },
           {
+            "name": "draw_slot",
+            "docs": [
+              "Slot, którego hash wylosuje skład arbitrów."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "panel_drawn",
+            "type": "bool"
+          },
+          {
+            "name": "panel",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "panel_settled",
+            "docs": [
+              "Bity: którzy arbitrzy ze składu zostali już rozliczeni (`settle_arbiter`)."
+            ],
+            "type": "u8"
+          },
+          {
             "name": "commits",
             "type": {
               "array": [
@@ -2612,19 +3516,19 @@
                     32
                   ]
                 },
-                5
+                3
               ]
             }
           },
           {
             "name": "votes",
             "docs": [
-              "0 = brak, 1 = za kupującym, 2 = za sprzedawcą (indeksy jak w `Config::arbiters`)"
+              "0 = brak, 1 = za kupującym, 2 = za sprzedawcą (indeksy jak w `panel`)"
             ],
             "type": {
               "array": [
                 "u8",
-                5
+                3
               ]
             }
           },
@@ -2641,6 +3545,17 @@
             "type": "u8"
           },
           {
+            "name": "verdict",
+            "type": "u8"
+          },
+          {
+            "name": "reward_share",
+            "docs": [
+              "Udział każdego arbitra głosującego za zwycięzcą w kaucji przegranego."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "reviewed_by_buyer",
             "type": "bool"
           },
@@ -2655,6 +3570,97 @@
           {
             "name": "vault_bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DealArchived",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "bond",
+            "type": "u64"
+          },
+          {
+            "name": "state",
+            "type": "u8"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "closed_at",
+            "type": "i64"
+          },
+          {
+            "name": "title",
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "type": "string"
+          },
+          {
+            "name": "photo_uri",
+            "type": "string"
+          },
+          {
+            "name": "photo_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "tracking",
+            "type": "string"
+          },
+          {
+            "name": "dispute_reason",
+            "type": "string"
+          },
+          {
+            "name": "pickup",
+            "type": "bool"
+          },
+          {
+            "name": "panel",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "votes",
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
           }
         ]
       }
@@ -2800,6 +3806,22 @@
       }
     },
     {
+      "name": "DrawRescheduled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "draw_slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Evidence",
       "type": {
         "kind": "struct",
@@ -2848,14 +3870,16 @@
             "type": "u8"
           },
           {
-            "name": "arbiters",
-            "type": {
-              "vec": "pubkey"
-            }
-          },
-          {
             "name": "arbiter_quorum",
             "type": "u8"
+          },
+          {
+            "name": "arbiter_stake",
+            "type": "u64"
+          },
+          {
+            "name": "miss_slash",
+            "type": "u64"
           },
           {
             "name": "ship_window",
@@ -2882,8 +3906,37 @@
             "type": "i64"
           },
           {
+            "name": "archive_window",
+            "type": "i64"
+          },
+          {
             "name": "bond_bps",
             "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PanelDrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "panel",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
           }
         ]
       }
@@ -2896,6 +3949,27 @@
           {
             "name": "id",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Pool",
+      "docs": [
+        "Otwarta pula arbitrów — każdy z kaucją może dołączyć; z niej losowany jest skład do sporu."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "members",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

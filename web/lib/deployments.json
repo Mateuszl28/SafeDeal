@@ -2,59 +2,57 @@
   "localnet": {
     "cluster": "localnet",
     "rpc": "http://127.0.0.1:8899",
-    "programId": "B7aMTf719JpBybXggkHyFsAKemfM6eNbAU6mA7rUzJmn",
-    "mint": "9JjN4kw7BRyyT7YG8zmS4w8mCc1DLNqD7mXKxUnSaaQ4",
-    "config": "SdpSvGt1DomfSRBcorSj5sXuMS7JhFNGQhJDvxGjz77",
+    "programId": "Eo9CXiAbBVBE5megSiY8H67c91qP3BZ8NjWgQvu9EzRZ",
+    "mint": "9ktit5nYVRzRXxo3QSw8yXwJULyRNY3aDTYduKYcYbxi",
+    "config": "4XdxjzpNFfQowyLoUNWt869Bk9opav1aawU2EKFWqeUN",
     "oracles": [
       "GP448JDdUnSk8gp58dNu2joLzSYoyT6kmZ8syxJG24oE",
       "3oGQ15GbpnNpZir5WqLJYAizZtwz2u6dbXp2EtuSDYJ9",
       "E2H2EBsLztXiVghswZp2EqKfQuoXZYZQ6ppCwVnpY64R"
     ],
     "oracleQuorum": 2,
-    "arbiters": [
-      "BTVRh5fQHhNujkTxFv8LCVzEz4EijSYq634vQSy7smf5",
-      "3uwhiPV1Jh4Z5bpLpWNkNwvYPDg5zhw378rru4UFkYaN",
-      "AYGLuiELn9u3z8omBndvVHjh2oZjKzc72bgBG6yoBuPe"
-    ],
     "arbiterQuorum": 2,
+    "panelSize": 3,
+    "arbiterStake": "100000000",
+    "missSlash": "20000000",
     "windows": {
-      "ship": 900,
-      "transit": 300,
-      "inspection": 180,
-      "response": 300,
-      "arbitration": 300,
-      "reveal": 180
+      "ship": 6,
+      "transit": 4,
+      "inspection": 4,
+      "response": 6,
+      "arbitration": 8,
+      "reveal": 6,
+      "archive": 4
     },
     "bondBps": 500,
-    "deployedAt": "2026-10-03T11:11:32.685Z"
+    "deployedAt": "2026-10-06T15:28:26.267Z"
   },
   "devnet": {
     "cluster": "devnet",
     "rpc": "https://api.devnet.solana.com",
-    "programId": "B7aMTf719JpBybXggkHyFsAKemfM6eNbAU6mA7rUzJmn",
-    "mint": "DNsEicuaMXnzqFuVpSgSVb56Qfr69reaKDBSu5XgKCYx",
-    "config": "SdpSvGt1DomfSRBcorSj5sXuMS7JhFNGQhJDvxGjz77",
+    "programId": "Eo9CXiAbBVBE5megSiY8H67c91qP3BZ8NjWgQvu9EzRZ",
+    "mint": "6HAeL12eBBpLwtda6rfn6SGHjsKCnGDLNwsiJjwLSb1B",
+    "config": "4XdxjzpNFfQowyLoUNWt869Bk9opav1aawU2EKFWqeUN",
     "oracles": [
       "GP448JDdUnSk8gp58dNu2joLzSYoyT6kmZ8syxJG24oE",
       "3oGQ15GbpnNpZir5WqLJYAizZtwz2u6dbXp2EtuSDYJ9",
       "E2H2EBsLztXiVghswZp2EqKfQuoXZYZQ6ppCwVnpY64R"
     ],
     "oracleQuorum": 2,
-    "arbiters": [
-      "BTVRh5fQHhNujkTxFv8LCVzEz4EijSYq634vQSy7smf5",
-      "3uwhiPV1Jh4Z5bpLpWNkNwvYPDg5zhw378rru4UFkYaN",
-      "AYGLuiELn9u3z8omBndvVHjh2oZjKzc72bgBG6yoBuPe"
-    ],
     "arbiterQuorum": 2,
+    "panelSize": 3,
+    "arbiterStake": "100000000",
+    "missSlash": "20000000",
     "windows": {
       "ship": 900,
       "transit": 300,
       "inspection": 180,
       "response": 300,
       "arbitration": 300,
-      "reveal": 180
+      "reveal": 180,
+      "archive": 600
     },
     "bondBps": 500,
-    "deployedAt": "2026-10-03T12:08:23.593Z"
+    "deployedAt": "2026-10-06T15:30:59.038Z"
   }
 }

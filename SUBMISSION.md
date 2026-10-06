@@ -24,9 +24,9 @@ tylko w swoim serwisie. W obu przypadkach transakcja opiera się na zaufaniu —
 **Co zmienia usunięcie pośrednika.** Kupujący wpłaca USDC do sejfu — konta tokenowego, którego właścicielem jest
 adres programu (PDA). Nikt nie ma do niego klucza. Wypłacić może tylko program i tylko gdy spełni się zapisany
 warunek: kupujący potwierdzi odbiór, 2 z 3 niezależnych źródeł potwierdzą doręczenie i minie okno reklamacji,
-kupujący pokaże kod przy odbiorze osobistym albo 2 z 3 arbitrów rozstrzygnie spór. Każdy stan ma termin i z góry
+kupujący pokaże kod przy odbiorze osobistym albo 2 z 3 arbitrów wylosowanych z otwartej puli rozstrzygnie spór. Każdy stan ma termin i z góry
 znany wynik, więc nikt nie zamrozi pieniędzy, znikając — a rozliczenie po terminie może wywołać każdy, bez
-naszego serwera. Program nie ma żadnej instrukcji administratora: reguły (token, oracle, arbitrzy, terminy,
+naszego serwera. Program nie ma żadnej instrukcji administratora: reguły (token, oracle, kaucje arbitrów, terminy,
 kaucja) zapisano raz przy wdrożeniu.
 
 **Moment, w którym pośrednik znika (w aplikacji).** Na stronie każdej transakcji panel „Kto może teraz ruszyć te
@@ -37,29 +37,36 @@ odbioru za kupującego, rozliczenie przed terminem — każda próba to prawdziw
 odrzucona przez kod on-chain.
 
 **Spory i teoria gier.** Reklamacja wymaga kaucji 5%; żeby ją odeprzeć, sprzedawca wpłaca tyle samo. Przegrany
-traci kaucję na rzecz arbitrów, którzy głosowali za zwycięzcą. Głosy są niejawne (commit–reveal), więc nikt nie
+traci kaucję na rzecz arbitrów, którzy głosowali za zwycięzcą. Arbitrów nie wybiera nikt: każdy może dołączyć do otwartej
+puli z kaucją, a do sporu program losuje 3 osoby spoza stron z hasha slotu, który powstał dopiero po przyjęciu sporu.
+Arbiter, który nie zagłosuje, traci część kaucji (spalana — nikt na tym nie zarabia). Głosy są niejawne (commit–reveal), więc nikt nie
 dopasuje się do większości. Strony mogą też zawrzeć ugodę (częściowy zwrot), a akceptacja wymaga tej samej kwoty,
 więc oferty nie da się podmienić. Opis i hash zdjęcia oferty są zamrożone on-chain po wpłacie — to dowód przy
 reklamacji „niezgodne z opisem”.
 
 **Co dalej.** Prawdziwe oracle doręczeń jako niezależni operatorzy (relayer już czyta status z publicznego API
-InPost), otwarta pula arbitrów z kaucją i losowaniem przez VRF, prawdziwe USDC, wtyczka „Kup przez SafeDeal”
-dla serwisów z ogłoszeniami, audyt i odebranie upgrade authority (`--final`).
+InPost), losowanie składu arbitrów przez VRF zamiast hasha slotu, prawdziwe USDC, audyt i odebranie upgrade
+authority (`--final`).
+
+**Poza naszą stroną i bez śmieci w sieci.** Wtyczka „Kup przez SafeDeal” (`/wtyczka`): serwis z ogłoszeniami dodaje
+jedną linijkę `<script>` i w ogłoszeniu pojawia się karta oferty z gwarancjami i przyciskiem zakupu, a przycisk
+„Sprzedaj przez SafeDeal” wystawia ofertę z danymi ogłoszenia. Po rozliczeniu każdy może zamknąć konta transakcji —
+rent wraca do sprzedawcy, a opis zostaje w historii łańcucha.
 
 ## Technologia
 
 - Program on-chain: Rust + Anchor 0.32 (`solana/programs/safedeal/src/lib.rs`), SPL Token, wdrożony na devnecie:
-  `B7aMTf719JpBybXggkHyFsAKemfM6eNbAU6mA7rUzJmn`.
+  `Eo9CXiAbBVBE5megSiY8H67c91qP3BZ8NjWgQvu9EzRZ`.
 - Frontend: Next.js, @coral-xyz/anchor, @solana/web3.js, Wallet Adapter (Phantom, Solflare), tryb demo z personami.
 - Solana Actions / Blinks: każda oferta jako karta zakupu do wklejenia w post lub czat; transakcję częściowo
   podpisuje sponsor opłat, więc kupujący bez SOL płaci jednym podpisem.
-- Testy: `solana/scripts/e2e.mjs` — 9 scenariuszy end-to-end (w tym znikanie każdej ze stron i próby obejścia reguł).
+- Testy: `solana/scripts/e2e.mjs` — 10 scenariuszy end-to-end (znikanie każdej ze stron, losowanie składu arbitrów, kary za nieobecność, zamykanie kont, próby obejścia reguł).
 
 ## Ograniczenia (świadome)
 
 - Trzy klucze oracle trzyma w MVP jeden relayer (a w panelu demo przeglądarka) — symulacja niezależnych źródeł;
   program już dziś wymaga zgody 2 z 3.
-- Rada arbitrów jest stała (zapisana przy wdrożeniu).
+- Skład arbitrów losuje hash przyszłego slotu, nie VRF (lider slotu teoretycznie mógłby wpłynąć na wynik).
 - Pliki (zdjęcia, dowody) leżą poza łańcuchem; on-chain jest ich hash.
 - Do czasu `--final` wdrażający może podmienić kod programu (strona „Dla jury” pokazuje to na żywo).
 
@@ -68,4 +75,4 @@ dla serwisów z ogłoszeniami, audyt i odebranie upgrade authority (`--final`).
 - Repozytorium: https://github.com/Mateuszl28/SafeDeal
 - Film (≤ 3 min): [uzupełnij]
 - Prezentacja PDF: [uzupełnij]
-- Program w Solana Explorer: https://explorer.solana.com/address/B7aMTf719JpBybXggkHyFsAKemfM6eNbAU6mA7rUzJmn?cluster=devnet
+- Program w Solana Explorer: https://explorer.solana.com/address/Eo9CXiAbBVBE5megSiY8H67c91qP3BZ8NjWgQvu9EzRZ?cluster=devnet

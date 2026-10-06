@@ -87,7 +87,17 @@ export function describeEvent(e: ChainEvent, deal: Deal): string {
     case "DisputeOpened":
       return `${who(deal.buyer)} zgłasza reklamację: „${String(a.reason)}” (kaucja ${fmtUsdc(deal.bond)})`;
     case "ArbitrationStarted":
-      return `${who(deal.seller)} odrzuca reklamację i wpłaca kaucję — decydują arbitrzy`;
+      return `${who(deal.seller)} odrzuca reklamację i wpłaca kaucję — skład arbitrów wylosuje hash slotu ${String(a.drawSlot)}`;
+    case "DrawRescheduled":
+      return `Slot losowania wypadł z historii — losowanie przesunięte na slot ${String(a.drawSlot)}`;
+    case "PanelDrawn":
+      return `Wylosowany skład arbitrów: ${(a.panel as unknown[]).map(who).join(", ")}`;
+    case "ArbiterSettled": {
+      const parts = [evBig(a.reward) > 0n ? `nagroda ${fmtUsdc(evBig(a.reward))}` : "", evBig(a.slashed) > 0n ? `kara za nieobecność ${fmtUsdc(evBig(a.slashed))} (spalona)` : ""].filter(Boolean);
+      return `Rozliczenie arbitra ${who(a.arbiter)}${parts.length ? `: ${parts.join(", ")}` : ""}${a.removed ? " — kaucja poniżej minimum, wypada z puli" : ""}`;
+    }
+    case "DealArchived":
+      return "Konta transakcji zamknięte — rent wrócił do sprzedawcy, opis zostaje w historii łańcucha";
     case "VoteCommitted":
       return `${who(a.arbiter)} oddaje niejawny głos (zapisany tylko odcisk)`;
     case "Voted":

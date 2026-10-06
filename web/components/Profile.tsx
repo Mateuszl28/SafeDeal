@@ -2,21 +2,19 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { State, type Address } from "@/lib/contracts";
+import { State, type Address, type ArbiterAccount } from "@/lib/contracts";
 import { dealsDone, fmtUsdc, sameAddr, short } from "@/lib/format";
-import { fetchConfig, fetchProfile } from "@/lib/solana";
+import { fetchArbiters, fetchProfile } from "@/lib/solana";
 import { nameOf, useWallet } from "@/lib/wallet";
 import type { Row } from "./DealList";
 
 type Rep = { soldOk: number; boughtOk: number; won: number; lost: number };
-type ArbStats = { withMajority: number; againstMajority: number; missed: number };
 
 /** Reputacja z konta profilu w programie — nikt (także my) nie może jej podkręcić ani usunąć. */
 function useReputation(address: Address) {
   const w = useWallet();
   const [rep, setRep] = useState<Rep>();
-  const [arb, setArb] = useState<ArbStats>();
-  const isCouncil = !!w.deployment?.arbiters.some((a) => sameAddr(a, address));
+  const [arb, setArb] = useState<ArbiterAccount>();
 
   useEffect(() => {
     if (!w.deployment || !w.program) return;
@@ -25,16 +23,13 @@ function useReputation(address: Address) {
       .catch(() => setRep(undefined));
   }, [w.deployment, w.program, w.refreshKey, address]);
 
-  // Statystyki arbitrów są w koncie konfiguracji — czytamy je tylko dla członków rady.
+  // Konto arbitra (kaucja, rzetelność) — istnieje tylko u kogoś, kto był w puli arbitrów.
   useEffect(() => {
-    if (!w.deployment || !w.program || !isCouncil) return setArb(undefined);
-    fetchConfig(w.program, w.deployment)
-      .then((c) => {
-        const i = c.arbiters.findIndex((a) => sameAddr(a, address));
-        setArb(i < 0 ? undefined : { withMajority: c.arbWithMajority[i] ?? 0, againstMajority: c.arbAgainstMajority[i] ?? 0, missed: c.arbMissed[i] ?? 0 });
-      })
+    if (!w.program) return setArb(undefined);
+    fetchArbiters(w.program, [address])
+      .then(([a]) => setArb(a ?? undefined))
       .catch(() => setArb(undefined));
-  }, [w.deployment, w.program, w.lastTx, isCouncil, address]);
+  }, [w.program, w.lastTx, address]);
 
   return { rep, arb };
 }
@@ -89,7 +84,8 @@ export function ProfileSummary({ address, deals, compact }: { address: Address; 
 
       {arb && (
         <p className="muted small">
-          Jako arbiter: {arb.withMajority} głosów zgodnych z werdyktem · {arb.againstMajority} przeciw · {arb.missed} nieobecności
+          Jako arbiter{arb.inPool ? ` (w puli, kaucja ${fmtUsdc(arb.stake)})` : ""}: {arb.cases} wylosowanych spraw ·{" "}
+          {arb.withMajority} głosów zgodnych z werdyktem · {arb.againstMajority} przeciw · {arb.missed} nieobecności
         </p>
       )}
       <p className="muted small">Dane pochodzą wprost z publicznego rejestru — nie da się ich kupić, usunąć ani podkręcić.</p>
