@@ -33,8 +33,14 @@ kaucja) zapisano raz przy wdrożeniu.
 pieniądze?” wylicza z reguł programu, dokąd i pod jakim warunkiem mogą trafić środki — i kto nie może: sprzedawca
 przed spełnieniem warunku, kupujący (nie cofnie wpłaty) i autorzy. Strona „Dla jury” pozwala samemu spróbować
 oszukać program: wypłata z sejfu z pominięciem programu, zwrot „kupującemu” na własne konto, potwierdzenie
-odbioru za kupującego, rozliczenie przed terminem — każda próba to prawdziwa transakcja symulowana w sieci,
-odrzucona przez kod on-chain.
+odbioru za kupującego, rozliczenie przed terminem, wpisanie siebie do składu arbitrów, głos bez wylosowania, rent
+z zamkniętej transakcji albo nagroda arbitra na własne konto — każda próba to prawdziwa transakcja symulowana
+w sieci, odrzucona przez kod on-chain, z wyjaśnieniem dlaczego.
+
+**Nikt nie musi pilnować.** Relayer działa na hostingu bez własnego serwera (`/api/relayer`, wołany przez stronę
+transakcji i co 5 minut przez GitHub Actions): potwierdza doręczenia, losuje skład arbitrów, rozlicza po terminie,
+wypłaca nagrody arbitrom i zamyka konta. Nie ma przy tym żadnej władzy — każdą z tych instrukcji może wywołać
+każdy, a odbiorców pieniędzy wyznacza program.
 
 **Spory i teoria gier.** Reklamacja wymaga kaucji 5%; żeby ją odeprzeć, sprzedawca wpłaca tyle samo. Przegrany
 traci kaucję na rzecz arbitrów, którzy głosowali za zwycięzcą. Arbitrów nie wybiera nikt: każdy może dołączyć do otwartej
@@ -64,8 +70,8 @@ rent wraca do sprzedawcy, a opis zostaje w historii łańcucha.
 
 ## Ograniczenia (świadome)
 
-- Trzy klucze oracle trzyma w MVP jeden relayer (a w panelu demo przeglądarka) — symulacja niezależnych źródeł;
-  program już dziś wymaga zgody 2 z 3.
+- Trzy klucze oracle trzyma w MVP jeden relayer (a w panelu demo przeglądarka; to klucze devnetowe widoczne
+  w trybie demo) — symulacja niezależnych źródeł; program już dziś wymaga zgody 2 z 3.
 - Skład arbitrów losuje hash przyszłego slotu, nie VRF (lider slotu teoretycznie mógłby wpłynąć na wynik).
 - Pliki (zdjęcia, dowody) leżą poza łańcuchem; on-chain jest ich hash.
 - Do czasu `--final` wdrażający może podmienić kod programu (strona „Dla jury” pokazuje to na żywo).
