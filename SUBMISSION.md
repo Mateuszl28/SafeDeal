@@ -72,6 +72,7 @@ rent wraca do sprzedawcy, a opis zostaje w historii łańcucha.
 
 ## Linki
 
+- Aplikacja (devnet): https://safe-deal-one.vercel.app
 - Repozytorium: https://github.com/Mateuszl28/SafeDeal
 - Film (≤ 3 min): [uzupełnij]
 - Prezentacja PDF: [uzupełnij]

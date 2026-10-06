@@ -11,6 +11,7 @@ na życzenie widoczna: każda akcja ma link do Solana Explorer.
 
 **Na żywo (Solana devnet):** program `Eo9CXiAbBVBE5megSiY8H67c91qP3BZ8NjWgQvu9EzRZ` —
 [Solana Explorer](https://explorer.solana.com/address/Eo9CXiAbBVBE5megSiY8H67c91qP3BZ8NjWgQvu9EzRZ?cluster=devnet).
+Aplikacja: **https://safe-deal-one.vercel.app** (tryb demo z personami — bez portfela; albo Phantom / Solflare na devnecie).
 
 ## Uzasadnienie projektowe
 
