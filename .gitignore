@@ -18,3 +18,4 @@ solana/keys/
 solana/target/
 solana/test-ledger/
 solana/.anchor/
+.vercel

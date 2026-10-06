@@ -1,0 +1,10 @@
+# Deploy z CLI (katalog główny projektu na Vercelu: web/) — wysyłamy tylko aplikację webową,
+# bez innych katalogów repozytorium, kluczy i lokalnych plików env.
+/*
+!/web
+/web/node_modules
+/web/.next
+/web/.next-build
+/web/.env*
+/web/.vercel
+/web/*.log
