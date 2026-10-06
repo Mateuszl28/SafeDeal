@@ -3,6 +3,8 @@ members = ["programs/*"]
 resolver = "2"
 
 [profile.release]
+# najmniejszy plik programu = mniejszy rent za wdrożenie
+opt-level = "z"
 overflow-checks = true
 lto = "fat"
 codegen-units = 1

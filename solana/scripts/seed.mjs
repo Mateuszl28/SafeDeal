@@ -22,7 +22,7 @@ async function main() {
   console.log(`Seed na ${CLUSTER}`);
   // Kran wydaje po 1000 testowych USDC; Bartek płaci za wszystkie zakupy w scenie (~2300 + kaucje).
   const want = new Map([[bartek, usdc(3500)], [alicja, usdc(1500)]]);
-  for (const p of [alicja, bartek, P["Arbiter 1"], P["Arbiter 2"], P["Arbiter 3"], P.Celina]) {
+  for (const p of [alicja, bartek, P.Celina]) {
     while ((await c.balance(p.publicKey)) < (want.get(p) ?? usdc(1000))) await c.faucet(p);
   }
 
@@ -54,14 +54,16 @@ async function main() {
     await c.openDispute(bartek, e, "Jeden pad nie działa, brak kabla HDMI");
   });
 
-  // 4. Arbitraż — jeden arbiter już złożył niejawny głos
+  // 4. Arbitraż — skład wylosowany z puli, jeden arbiter już złożył niejawny głos
   const f = await create("Hulajnoga elektryczna Xiaomi 4", 290, "Zasięg do 35 km według producenta, przebieg 300 km.");
   await step("#4 arbitraż", async () => {
     await shipAndDeliver(f, "DEMO-520004");
     await c.openDispute(bartek, f, "Bateria trzyma 5 km zamiast 35 km z opisu");
     await c.respondToDispute(alicja, f);
-    // sól tego głosu nie jest nigdzie zapisana — arbiter 1 nie ujawni go z przeglądarki; to tylko tło sceny
-    await c.commitVote(P["Arbiter 1"], f, voteCommitment(BigInt(f), P["Arbiter 1"].publicKey, true, crypto.randomBytes(32)));
+    const [first] = await c.drawPanel(P.Celina, f);
+    const arb = Object.values(P).find((k) => k.publicKey.equals(first));
+    // sól tego głosu nie jest nigdzie zapisana — ten arbiter nie ujawni go z przeglądarki; to tylko tło sceny
+    await c.commitVote(arb, f, voteCommitment(BigInt(f), arb.publicKey, true, crypto.randomBytes(32)));
   });
 
   // 5. Propozycja ugody

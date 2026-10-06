@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-safedeal = "B7aMTf719JpBybXggkHyFsAKemfM6eNbAU6mA7rUzJmn"
+safedeal = "Eo9CXiAbBVBE5megSiY8H67c91qP3BZ8NjWgQvu9EzRZ"
 
 [programs.localnet]
-safedeal = "B7aMTf719JpBybXggkHyFsAKemfM6eNbAU6mA7rUzJmn"
+safedeal = "Eo9CXiAbBVBE5megSiY8H67c91qP3BZ8NjWgQvu9EzRZ"
 
 [registry]
 url = "https://api.apr.dev"

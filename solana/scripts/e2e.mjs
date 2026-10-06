@@ -3,7 +3,7 @@
 // Sprawdza pełne scenariusze i to, że reguł nie da się obejść.
 import crypto from "node:crypto";
 import { PublicKey } from "@solana/web3.js";
-import { CLUSTER, client, connection, demoKeys, idl, readDeployments, sleep, usdc, voteCommitment } from "./common.mjs";
+import { CLUSTER, client, connection, demoKeys, idl, pda, pickupHash, readDeployments, sleep, usdc, voteCommitment } from "./common.mjs";
 
 const ERR = Object.fromEntries(idl.errors.map((e) => [e.name, e.code]));
 
@@ -13,8 +13,9 @@ const mint = new PublicKey(d.mint);
 const c = client(mint);
 const { personas: P, oracles: O } = demoKeys();
 const [alicja, bartek, celina] = [P.Alicja, P.Bartek, P.Celina];
-const arbs = [P["Arbiter 1"], P["Arbiter 2"], P["Arbiter 3"]];
-const arbKeys = arbs.map((a) => a.publicKey);
+const arbs = [1, 2, 3, 4, 5].map((i) => P[`Arbiter ${i}`]);
+const byKey = (k) => arbs.find((a) => a.publicKey.equals(k));
+const lamports = (k) => connection.getBalance(k, "confirmed");
 const W = d.windows;
 
 let passed = 0;
@@ -73,6 +74,14 @@ async function main() {
     await c.review(bartek, id, 5, "Super");
     await rejects(c.review(bartek, id, 4, "drugi raz"), "NotAllowed");
     await rejects(c.review(celina, id, 1, "obca"), "NotAllowed");
+    await rejects(c.closeDeal(celina, id), "DeadlineNotReached"); // sprzedawczyni jeszcze nie oceniła
+    await c.review(alicja, id, 5, "OK");
+    // porządki może zrobić każdy, ale rent wraca do sprzedawczyni
+    const l0 = await lamports(alicja.publicKey);
+    await c.closeDeal(celina, id);
+    eq(await connection.getAccountInfo(pda.deal(id)), null, "konto transakcji zamknięte");
+    eq(await connection.getAccountInfo(pda.vault(pda.deal(id))), null, "sejf zamknięty");
+    if ((await lamports(alicja.publicKey)) - l0 < 10_000_000) throw new Error("rent nie wrócił do sprzedawczyni");
   });
 
   await test("sprzedawca znika → po terminie KAŻDY może zwrócić pieniądze kupującemu", async () => {
@@ -96,9 +105,18 @@ async function main() {
     await c.settleExpired(celina, id);
     eq(await state(id), S.Released, "wypłata");
     eq((await c.balance(alicja.publicKey)) - a0, usdc(30), "kwota");
+    await rejects(c.closeDeal(celina, id), "DeadlineNotReached"); // okno na opinie
+    await sleep((W.archive + 2) * 1000);
+    await c.closeDeal(celina, id);
+    eq(await connection.getAccountInfo(pda.deal(id)), null, "zamknięta po oknie na opinie");
   });
 
-  await test("reklamacja → arbitraż → niejawne głosy → wygrywa kupujący, kaucja dla arbitrów", async () => {
+  await test("pula arbitrów: kaucja poniżej minimum odrzucona", async () => {
+    await rejects(c.joinPool(celina, usdc(50)), "InvalidParams");
+    eq((await c.fetchPool()).members.length, 5, "5 arbitrów w puli");
+  });
+
+  await test("reklamacja → losowanie składu → niejawne głosy → wygrywa kupujący, kaucja dla arbitrów", async () => {
     const id = await c.createDeal(alicja, { amount: usdc(200), title: "Spór" });
     await c.fund(bartek, id);
     await c.markShipped(alicja, id, "DEMO-4");
@@ -109,36 +127,69 @@ async function main() {
     eq(b0 - (await c.balance(bartek.publicKey)), bond, "kaucja kupującego");
     await c.respondToDispute(alicja, id);
     eq(await state(id), S.InArbitration, "arbitraż");
-    await rejects(c.commitVote(celina, id, crypto.randomBytes(32)), "NotAllowed");
+    await rejects(c.commitVote(arbs[0], id, crypto.randomBytes(32)), "NotAllowed"); // skład jeszcze nie wylosowany
+    const panelKeys = await c.drawPanel(celina, id); // losowanie może pchnąć każdy
+    const panel = panelKeys.map(byKey);
+    eq(new Set(panelKeys.map(String)).size, 3, "trzy różne osoby");
+    if (panel.some((a) => !a)) throw new Error("w składzie ktoś spoza puli");
+    const outsider = arbs.find((a) => !panelKeys.some((k) => k.equals(a.publicKey)));
+    await rejects(c.commitVote(outsider, id, crypto.randomBytes(32)), "NotAllowed");
+    await rejects(c.leavePool(panel[0]), "ArbiterBusy");
     const votes = [true, true, false];
     const salts = votes.map(() => crypto.randomBytes(32));
+    const commit = (i) => c.commitVote(panel[i], id, voteCommitment(BigInt(id), panelKeys[i], votes[i], salts[i]));
     // ujawnianie przed złożeniem wszystkich głosów jest zamknięte
-    await c.commitVote(arbs[0], id, voteCommitment(BigInt(id), arbKeys[0], votes[0], salts[0]));
-    await rejects(c.revealVote(arbs[0], id, votes[0], salts[0], arbKeys), "RevealNotOpen");
-    for (let i = 1; i < 3; i++) await c.commitVote(arbs[i], id, voteCommitment(BigInt(id), arbKeys[i], votes[i], salts[i]));
-    await rejects(c.revealVote(arbs[2], id, true, salts[2], arbKeys), "BadReveal"); // nie da się zmienić głosu
-    const arb0 = await c.balance(arbKeys[0]);
-    await c.revealVote(arbs[2], id, false, salts[2], arbKeys);
-    await c.revealVote(arbs[0], id, true, salts[0], arbKeys);
+    await commit(0);
+    await rejects(c.revealVote(panel[0], id, votes[0], salts[0]), "RevealNotOpen");
+    await commit(1);
+    await commit(2);
+    await rejects(c.revealVote(panel[2], id, true, salts[2]), "BadReveal"); // nie da się zmienić głosu
+    await c.revealVote(panel[2], id, false, salts[2]);
+    await c.revealVote(panel[0], id, true, salts[0]);
     eq(await state(id), S.InArbitration, "1:1 — jeszcze bez werdyktu");
-    await c.revealVote(arbs[1], id, true, salts[1], arbKeys);
+    await c.revealVote(panel[1], id, true, salts[1]);
     eq(await state(id), S.Refunded, "kupujący wygrał");
     eq((await c.balance(bartek.publicKey)) - b0, usdc(200), "kupujący: kwota + własna kaucja");
-    eq((await c.balance(arbKeys[0])) - arb0, bond / 2n, "arbiter większości: połowa kaucji przegranego");
+    await rejects(c.closeDeal(celina, id), "ArbitersNotSettled");
+    const before = await Promise.all(panelKeys.map((k) => c.balance(k)));
+    for (let i = 0; i < 3; i++) await c.settleArbiter(celina, id, i);
+    await rejects(c.settleArbiter(celina, id, 0), "NotAllowed");
+    const after = await Promise.all(panelKeys.map((k) => c.balance(k)));
+    eq(after[0] - before[0], bond / 2n, "arbiter większości: połowa kaucji przegranego");
+    eq(after[2] - before[2], 0n, "arbiter mniejszości: nic");
+    const st = await Promise.all(panelKeys.map((k) => c.fetchArbiter(k)));
+    eq(st[0].activeCases, 0, "sprawa zwolniona");
+    eq(st[2].againstMajority >= 1, true, "głos przeciw odnotowany");
+    eq((await connection.getTokenAccountBalance(pda.vault(pda.deal(id)))).value.amount, "0", "sejf pusty");
   });
 
-  await test("arbitrzy milczą → po terminie podział 50/50, kaucje wracają", async () => {
+  await test("arbitrzy milczą → po terminie podział 50/50, nieobecnym spalona część kaucji", async () => {
     const id = await c.createDeal(alicja, { amount: usdc(100), title: "Cisza arbitrów" });
     await c.fund(bartek, id);
     await c.markShipped(alicja, id, "DEMO-5");
     await c.openDispute(bartek, id, "?");
     await c.respondToDispute(alicja, id);
+    const panelKeys = await c.drawPanel(celina, id);
     const [a0, b0] = [await c.balance(alicja.publicKey), await c.balance(bartek.publicKey)];
     await sleep((W.arbitration + W.reveal + 2) * 1000);
     await c.settleExpired(celina, id);
     eq(await state(id), S.Split, "podział");
     eq((await c.balance(alicja.publicKey)) - a0, usdc(55), "sprzedawczyni: 50 + kaucja 5");
     eq((await c.balance(bartek.publicKey)) - b0, usdc(55), "kupujący: 50 + kaucja 5");
+    const stake0 = BigInt((await c.fetchArbiter(panelKeys[0])).stake.toString());
+    const supply0 = BigInt((await connection.getTokenSupply(mint)).value.amount);
+    for (let i = 0; i < 3; i++) await c.settleArbiter(celina, id, i);
+    const a = await c.fetchArbiter(panelKeys[0]);
+    const stake1 = BigInt(a.stake.toString());
+    eq(stake0 - stake1, BigInt(d.missSlash), "kara z kaucji");
+    eq(supply0 - BigInt((await connection.getTokenSupply(mint)).value.amount), 3n * BigInt(d.missSlash), "kary spalone");
+    // po rozliczeniu arbiter może wyjść z puli i odebrać resztę kaucji
+    const p = byKey(panelKeys[0]);
+    const t0 = await c.balance(p.publicKey);
+    await c.leavePool(p);
+    eq((await c.balance(p.publicKey)) - t0, stake1, "zwrot kaucji");
+    await c.joinPool(p, usdc(200));
+    eq((await c.fetchPool()).members.length, 5, "wrócił do puli");
   });
 
   await test("sprzedawca ignoruje reklamację → kupujący wygrywa po terminie", async () => {
@@ -157,7 +208,6 @@ async function main() {
   await test("odbiór osobisty: zły kod odrzucony, dobry kod wypłaca od ręki", async () => {
     const id = await c.createDeal(alicja, { amount: usdc(130), title: "Odbiór", pickupAllowed: true });
     const code = "ABCD-EFGH-JKMN-PQRS";
-    const { pickupHash } = await import("./common.mjs");
     await c.fund(bartek, id, pickupHash(BigInt(id), code));
     await rejects(c.markShipped(alicja, id, "X"), "NotAllowed");
     await rejects(c.confirmPickup(alicja, id, "ABCD-EFGH-JKMN-PQRT"), "BadReveal");
@@ -187,12 +237,10 @@ async function main() {
     await c.cancel(alicja, id);
     eq(await state(id), S.Cancelled, "anulowana");
     await rejects(c.fund(bartek, id), "WrongState");
+    await c.closeDeal(celina, id); // anulowana — od razu
+    eq(await connection.getAccountInfo(pda.deal(id)), null, "zamknięta");
   });
 
-  const vault = await connection.getTokenAccountBalance(
-    (await import("./common.mjs")).pda.vault((await import("./common.mjs")).pda.deal(1n)),
-  );
-  console.log(`\nSejf transakcji #1 po zakończeniu: ${vault.value.uiAmountString} USDC`);
   console.log(`\n${passed} OK, ${failed} błędów`);
   if (failed) process.exitCode = 1;
 }

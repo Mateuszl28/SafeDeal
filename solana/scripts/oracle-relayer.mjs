@@ -5,6 +5,10 @@
 // Program liczy doręczenie dopiero po `oracle_quorum` zgodnych potwierdzeniach różnych kluczy. W tym MVP
 // wszystkie klucze trzyma jeden relayer; w produkcji każde źródło to osobny, niezależny operator
 // (API przewoźnika, skan w paczkomacie, Switchboard / Chainlink Functions).
+//
+// Przy okazji relayer „pcha” losowanie składu arbitrów (draw_panel) od razu, gdy slot losowania minie.
+// Może to zrobić każdy — robimy to szybko, żeby żadna strona nie mogła przeczekać niewygodnego wyniku,
+// aż slot wypadnie z historii i losowanie zostanie przesunięte.
 //   node scripts/oracle-relayer.mjs devnet
 import { PublicKey } from "@solana/web3.js";
 import { CLUSTER, client, demoKeys, pda, programFor, readDeployments, sleep } from "./common.mjs";
@@ -54,6 +58,15 @@ async function tick() {
   const all = (await program.account.deal.fetchMultiple(ids.map((i) => pda.deal(i)))).filter(Boolean);
   for (const deal of all) {
     const id = BigInt(deal.id.toString());
+    if (deal.state === 6 && !deal.panelDrawn) {
+      try {
+        const panel = await c.drawPanel(oracles[0], id);
+        console.log(`#${id}: wylosowany skład arbitrów: ${panel.map((k) => k.toBase58().slice(0, 6)).join(", ")}`);
+      } catch (e) {
+        console.log(`#${id}: losowanie — ${e.message.split("\n")[0]}`);
+      }
+      continue;
+    }
     if (deal.state !== 3) continue;
     const tracking = deal.tracking.trim();
 

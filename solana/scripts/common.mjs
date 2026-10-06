@@ -9,6 +9,7 @@ import {
   Keypair,
   LAMPORTS_PER_SOL,
   PublicKey,
+  SYSVAR_SLOT_HASHES_PUBKEY,
   SystemProgram,
   Transaction,
   sendAndConfirmTransaction,
@@ -70,6 +71,9 @@ export const pda = {
   deal: (id) => find([Buffer.from("deal"), u64le(id)]),
   vault: (deal) => find([Buffer.from("vault"), deal.toBuffer()]),
   profile: (owner) => find([Buffer.from("profile"), owner.toBuffer()]),
+  pool: () => find([Buffer.from("pool")]),
+  poolVault: () => find([Buffer.from("pool_vault")]),
+  arbiter: (owner) => find([Buffer.from("arbiter"), owner.toBuffer()]),
 };
 export const ata = (mint, owner) => getAssociatedTokenAddressSync(mint, owner, true);
 
@@ -80,6 +84,33 @@ export const voteCommitment = (id, arbiter, forBuyer, salt) =>
   sha256(u64le(id), arbiter.toBuffer(), Buffer.from([forBuyer ? 1 : 0]), salt);
 export const codeBytes = (code) => sha256(Buffer.from(code));
 export const pickupHash = (id, code) => sha256(u64le(id), codeBytes(code));
+
+export const PANEL = 3;
+
+/** Hash najwcześniejszego slotu ≥ target z sysvaru SlotHashes (jak slot_hash_at_or_after w programie). */
+export function slotHashAtOrAfter(data, target) {
+  const n = Number(data.readBigUInt64LE(0));
+  let found = null;
+  for (let i = 0; i < n; i++) {
+    const off = 8 + i * 40;
+    if (off + 40 > data.length) break;
+    if (data.readBigUInt64LE(off) < BigInt(target)) return found;
+    found = data.subarray(off + 8, off + 40);
+  }
+  return null;
+}
+
+/** Losowanie składu — ten sam algorytm co pick_panel w programie. */
+export function pickPanel(members, id, seed, buyer, seller) {
+  const cand = members.filter((m) => !m.equals(buyer) && !m.equals(seller));
+  if (cand.length < PANEL) throw new Error("W puli jest za mało arbitrów");
+  const out = [];
+  for (let j = 0; j < PANEL; j++) {
+    const h = sha256(seed, u64le(id), Buffer.from([j]));
+    out.push(...cand.splice(Number(h.readBigUInt64LE(0) % BigInt(cand.length)), 1));
+  }
+  return out;
+}
 
 // ───────────────────────────── klient ─────────────────────────────
 
@@ -219,11 +250,89 @@ export function client(mint) {
     settleExpired: (who, id) => api.payout(who, "settleExpired", id),
     confirmPickup: (who, id, code) => api.payout(who, "confirmPickup", id, [[...codeBytes(code)]]),
     acceptSettlement: (who, id, buyerAmount) => api.payout(who, "acceptSettlement", id, [bn(buyerAmount)]),
-    async revealVote(arb, id, forBuyer, salt, arbiters) {
-      const pre = arbiters.map((a) => ensureAta(arb.publicKey, a));
-      await send(pre, [arb]);
-      const remaining = arbiters.map((a) => ({ pubkey: ata(mint, a), isSigner: false, isWritable: true }));
-      return api.payout(arb, "revealVote", id, [forBuyer, [...salt]], remaining);
+    revealVote: (arb, id, forBuyer, salt) => api.payout(arb, "revealVote", id, [forBuyer, [...salt]]),
+    fetchPool: () => programFor(Keypair.generate()).account.pool.fetch(pda.pool()),
+    fetchArbiter: (owner) => programFor(Keypair.generate()).account.arbiter.fetchNullable(pda.arbiter(owner)),
+    async poolAction(who, method, args = []) {
+      const ix = await programFor(who)
+        .methods[method](...args)
+        .accountsPartial({
+          owner: who.publicKey,
+          config,
+          pool: pda.pool(),
+          poolVault: pda.poolVault(),
+          arbiter: pda.arbiter(who.publicKey),
+          ownerAta: ata(mint, who.publicKey),
+          tokenProgram: TOKEN_PROGRAM_ID,
+          ...(method === "joinPool" ? { systemProgram: SystemProgram.programId } : {}),
+        })
+        .instruction();
+      return send([ix], [who]);
+    },
+    joinPool: (who, stake) => api.poolAction(who, "joinPool", [bn(stake)]),
+    leavePool: (who) => api.poolAction(who, "leavePool"),
+    /** Czeka na slot losowania, liczy skład z SlotHashes i wysyła draw_panel. Zwraca skład. */
+    async drawPanel(who, id) {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const d = await fetchDeal(id);
+        if (d.panelDrawn) return d.panel;
+        const target = BigInt(d.drawSlot.toString());
+        while (BigInt(await connection.getSlot("confirmed")) <= target) await sleep(200);
+        const sysvar = await connection.getAccountInfo(SYSVAR_SLOT_HASHES_PUBKEY, "confirmed");
+        const seed = slotHashAtOrAfter(sysvar.data, target);
+        const remaining = seed
+          ? pickPanel((await api.fetchPool()).members, BigInt(id), seed, d.buyer, d.seller).map((a) => ({
+              pubkey: pda.arbiter(a),
+              isSigner: false,
+              isWritable: true,
+            }))
+          : [];
+        const ix = await programFor(who)
+          .methods.drawPanel()
+          .accountsPartial({ actor: who.publicKey, config, pool: pda.pool(), deal: pda.deal(id), slotHashes: SYSVAR_SLOT_HASHES_PUBKEY })
+          .remainingAccounts(remaining)
+          .instruction();
+        await send([ix], [who]);
+      }
+      throw new Error("Nie udało się wylosować składu");
+    },
+    async settleArbiter(who, id, index) {
+      const d = await fetchDeal(id);
+      const owner = d.panel[index];
+      const dealPda = pda.deal(id);
+      const ix = await programFor(who)
+        .methods.settleArbiter(index)
+        .accountsPartial({
+          actor: who.publicKey,
+          config,
+          pool: pda.pool(),
+          poolVault: pda.poolVault(),
+          mint,
+          deal: dealPda,
+          vault: pda.vault(dealPda),
+          arbiter: pda.arbiter(owner),
+          arbiterAta: ata(mint, owner),
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .instruction();
+      return send([ensureAta(who.publicKey, owner), ix], [who]);
+    },
+    async closeDeal(who, id) {
+      const d = await fetchDeal(id);
+      const dealPda = pda.deal(id);
+      const ix = await programFor(who)
+        .methods.closeDeal()
+        .accountsPartial({
+          actor: who.publicKey,
+          config,
+          deal: dealPda,
+          vault: pda.vault(dealPda),
+          seller: d.seller,
+          sellerAta: ata(mint, d.seller),
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .instruction();
+      return send([ensureAta(who.publicKey, d.seller), ix], [who]);
     },
     async review(who, id, stars, comment) {
       const d = await fetchDeal(id);

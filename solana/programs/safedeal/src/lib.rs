@@ -6,21 +6,42 @@
 //! `settle_expired` (może je wywołać KAŻDY) rozstrzyga sprawę deterministycznie — żadna strona nie
 //! może zamrozić pieniędzy, znikając.
 //!
-//! Brak instrukcji administracyjnych: parametry (token, oracle, arbitrzy, terminy, kaucja) zapisuje
+//! Spory rozstrzygają arbitrzy z otwartej puli: każdy może do niej dołączyć, wpłacając kaucję.
+//! Skład (3 osoby) do konkretnego sporu losuje program z hasha slotu, który powstaje dopiero po
+//! zgłoszeniu sporu — nikt (także strony) nie wybiera arbitrów. Arbiter, który nie zagłosuje, traci
+//! część kaucji (spalana — nikt na niej nie zarabia).
+//!
+//! Po rozliczeniu każdy może zamknąć konta transakcji: rent wraca do sprzedawcy, który za nie zapłacił,
+//! a pełny opis transakcji zostaje w zdarzeniu `DealArchived` w historii łańcucha.
+//!
+//! Brak instrukcji administracyjnych: parametry (token, oracle, terminy, kaucje) zapisuje
 //! `initialize` raz i na zawsze. Nikt — także autor — nie może ich później zmienić ani wypłacić
 //! cudzych środków z sejfu.
 
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar::slot_hashes;
 use solana_sha256_hasher::hashv;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Burn, CloseAccount, Mint, MintTo, Token, TokenAccount, Transfer};
 
-declare_id!("B7aMTf719JpBybXggkHyFsAKemfM6eNbAU6mA7rUzJmn");
+declare_id!("Eo9CXiAbBVBE5megSiY8H67c91qP3BZ8NjWgQvu9EzRZ");
 
 pub const MAX_ORACLES: usize = 5;
-pub const MAX_ARBITERS: usize = 5;
+/// Liczba arbitrów losowanych do jednego sporu.
+pub const PANEL: usize = 3;
+/// Maksymalna liczba arbitrów w puli.
+pub const MAX_POOL: usize = 32;
+/// Losowanie składu używa hasha slotu, który powstanie co najmniej tyle slotów po zgłoszeniu.
+pub const DRAW_DELAY: u64 = 2;
 /// Ile tokenów (w najmniejszych jednostkach) wydaje kran testowego USDC — 1000 przy 6 miejscach.
 pub const FAUCET_AMOUNT: u64 = 1_000_000_000;
+
+pub const CONFIG_SEED: &[u8] = b"config";
+pub const DEAL_SEED: &[u8] = b"deal";
+pub const VAULT_SEED: &[u8] = b"vault";
+pub const POOL_SEED: &[u8] = b"pool";
+pub const POOL_VAULT_SEED: &[u8] = b"pool_vault";
+pub const ARBITER_SEED: &[u8] = b"arbiter";
 
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -58,21 +79,29 @@ impl State {
     }
 }
 
+/// Werdykt arbitrażu — od niego zależy rozliczenie każdego arbitra ze składu.
+pub const VERDICT_NONE: u8 = 0; // strony zawarły ugodę albo spór nie trafił do arbitrów
+pub const VERDICT_BUYER: u8 = 1;
+pub const VERDICT_SELLER: u8 = 2;
+pub const VERDICT_SPLIT: u8 = 3; // arbitrzy nie rozstrzygnęli w terminie
+
 #[program]
 pub mod safedeal {
     use super::*;
 
     // ───────────────────────────── konfiguracja (raz) ─────────────────────────────
 
-    /// Jednorazowo zapisuje reguły gry. Nie ma instrukcji, która mogłaby je zmienić.
+    /// Jednorazowo zapisuje reguły gry i zakłada pustą pulę arbitrów. Nie ma instrukcji, która
+    /// mogłaby je zmienić.
     pub fn initialize(ctx: Context<Initialize>, p: InitParams) -> Result<()> {
         require!(
             p.oracles.len() <= MAX_ORACLES
                 && p.oracle_quorum >= 1
                 && p.oracle_quorum as usize <= p.oracles.len()
-                && p.arbiters.len() <= MAX_ARBITERS
-                && p.arbiter_quorum >= 1
-                && p.arbiter_quorum as usize <= p.arbiters.len()
+                && p.arbiter_quorum as usize > PANEL / 2
+                && p.arbiter_quorum as usize <= PANEL
+                && p.arbiter_stake > 0
+                && p.miss_slash <= p.arbiter_stake
                 && p.bond_bps <= 10_000,
             SafeDealError::InvalidParams
         );
@@ -80,20 +109,22 @@ pub mod safedeal {
         c.mint = ctx.accounts.mint.key();
         c.oracles = p.oracles;
         c.oracle_quorum = p.oracle_quorum;
-        c.arbiters = p.arbiters;
         c.arbiter_quorum = p.arbiter_quorum;
+        c.arbiter_stake = p.arbiter_stake;
+        c.miss_slash = p.miss_slash;
         c.ship_window = p.ship_window;
         c.transit_window = p.transit_window;
         c.inspection_window = p.inspection_window;
         c.response_window = p.response_window;
         c.arbitration_window = p.arbitration_window;
         c.reveal_window = p.reveal_window;
+        c.archive_window = p.archive_window;
         c.bond_bps = p.bond_bps;
         c.deal_count = 0;
-        c.arb_with_majority = [0; MAX_ARBITERS];
-        c.arb_against_majority = [0; MAX_ARBITERS];
-        c.arb_missed = [0; MAX_ARBITERS];
         c.bump = ctx.bumps.config;
+        let pool = &mut ctx.accounts.pool;
+        pool.members = Vec::new();
+        pool.bump = ctx.bumps.pool;
         Ok(())
     }
 
@@ -114,6 +145,73 @@ pub mod safedeal {
             ),
             FAUCET_AMOUNT,
         )
+    }
+
+    // ───────────────────────────── pula arbitrów ─────────────────────────────
+
+    /// Każdy może zostać arbitrem: wpłaca kaucję do sejfu puli. Kaucja to koszt wejścia (przejęcie
+    /// składu wymaga wielu kaucji) i zabezpieczenie na wypadek nieobecności.
+    pub fn join_pool(ctx: Context<JoinPool>, stake: u64) -> Result<()> {
+        let c = &ctx.accounts.config;
+        require!(stake >= c.arbiter_stake, SafeDealError::InvalidParams);
+        let me = ctx.accounts.owner.key();
+        let pool = &mut ctx.accounts.pool;
+        require!(pool.members.len() < MAX_POOL, SafeDealError::PoolFull);
+        let a = &mut ctx.accounts.arbiter;
+        require!(!a.in_pool, SafeDealError::NotAllowed);
+        if a.owner == Pubkey::default() {
+            a.owner = me;
+            a.bump = ctx.bumps.arbiter;
+        }
+        a.in_pool = true;
+        a.stake += stake;
+        pool.members.push(me);
+        let total = a.stake;
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.owner_ata.to_account_info(),
+                    to: ctx.accounts.pool_vault.to_account_info(),
+                    authority: ctx.accounts.owner.to_account_info(),
+                },
+            ),
+            stake,
+        )?;
+        emit!(ArbiterJoined { arbiter: me, stake: total });
+        Ok(())
+    }
+
+    /// Arbiter wychodzi z puli i odbiera kaucję — tylko gdy nie ma żadnej nierozliczonej sprawy.
+    pub fn leave_pool(ctx: Context<LeavePool>) -> Result<()> {
+        let me = ctx.accounts.owner.key();
+        let a = &mut ctx.accounts.arbiter;
+        require!(a.active_cases == 0, SafeDealError::ArbiterBusy);
+        require!(a.stake > 0 || a.in_pool, SafeDealError::NotAllowed);
+        let amount = a.stake;
+        a.stake = 0;
+        a.in_pool = false;
+        let pool = &mut ctx.accounts.pool;
+        if let Some(i) = pool.members.iter().position(|m| *m == me) {
+            pool.members.swap_remove(i);
+        }
+        let seeds: &[&[u8]] = &[POOL_SEED, &[pool.bump]];
+        if amount > 0 {
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.pool_vault.to_account_info(),
+                        to: ctx.accounts.owner_ata.to_account_info(),
+                        authority: pool.to_account_info(),
+                    },
+                    &[seeds],
+                ),
+                amount,
+            )?;
+        }
+        emit!(ArbiterLeft { arbiter: me, stake: amount });
+        Ok(())
     }
 
     // ───────────────────────────── sprzedawca ─────────────────────────────
@@ -162,8 +260,7 @@ pub mod safedeal {
         let d = &mut ctx.accounts.deal;
         expect(d, State::Created)?;
         require_keys_eq!(ctx.accounts.seller.key(), d.seller, SafeDealError::NotAllowed);
-        close(d, State::Cancelled);
-        Ok(())
+        close(d, State::Cancelled)
     }
 
     pub fn mark_shipped(ctx: Context<SellerAction>, tracking: String) -> Result<()> {
@@ -182,22 +279,63 @@ pub mod safedeal {
         Ok(())
     }
 
-    /// Sprzedawca idzie do arbitrażu: wpłaca taką samą kaucję jak kupujący.
+    /// Sprzedawca idzie do arbitrażu: wpłaca taką samą kaucję jak kupujący. Skład arbitrów zostanie
+    /// wylosowany z hasha slotu, który jeszcze nie istnieje (`draw_slot`) — strona nie może dobrać
+    /// momentu wywołania tak, żeby trafić na „swoich” arbitrów.
     pub fn respond_to_dispute(ctx: Context<PartyDeposit>) -> Result<()> {
-        let now = Clock::get()?.unix_timestamp;
+        let clock = Clock::get()?;
         let c = &ctx.accounts.config;
         let d = &mut ctx.accounts.deal;
         expect(d, State::Disputed)?;
         require_keys_eq!(ctx.accounts.actor.key(), d.seller, SafeDealError::NotAllowed);
-        require!(now <= d.deadline, SafeDealError::DeadlinePassed);
+        require!(clock.unix_timestamp <= d.deadline, SafeDealError::DeadlinePassed);
         d.state = State::InArbitration as u8;
-        // deadline = koniec fazy ujawniania; koniec fazy commit = deadline - reveal_window
-        d.deadline = now + c.arbitration_window + c.reveal_window;
+        d.draw_slot = clock.slot + DRAW_DELAY;
+        // Termin liczony od nowa po losowaniu; gdyby nikt nie wylosował składu — podział 50/50.
+        d.deadline = clock.unix_timestamp + c.arbitration_window + c.reveal_window;
         let bond = d.bond;
-        let id = d.id;
-        let deadline = d.deadline;
+        let (id, deadline, draw_slot) = (d.id, d.deadline, d.draw_slot);
         deposit(&ctx.accounts.actor_ata, &ctx.accounts.vault, &ctx.accounts.actor, &ctx.accounts.token_program, bond)?;
-        emit!(ArbitrationStarted { id, deadline });
+        emit!(ArbitrationStarted { id, deadline, draw_slot });
+        Ok(())
+    }
+
+    // ───────────────────────────── losowanie składu ─────────────────────────────
+
+    /// Losuje 3 arbitrów z puli (bez stron sporu). Źródło losowości: hash pierwszego slotu ≥
+    /// `draw_slot` z sysvaru SlotHashes — nieznany w chwili, gdy sprzedawca przyjął spór.
+    /// Może wywołać każdy. `remaining_accounts` = konta wylosowanych arbitrów w kolejności losowania
+    /// (klient liczy je tym samym algorytmem); program sprawdza każdy adres.
+    /// Gdy slot wypadł już z historii (~3 min), losowanie przesuwa się na nowy przyszły slot.
+    pub fn draw_panel<'info>(ctx: Context<'_, '_, 'info, 'info, DrawPanel<'info>>) -> Result<()> {
+        let clock = Clock::get()?;
+        let c = &ctx.accounts.config;
+        let d = &mut ctx.accounts.deal;
+        expect(d, State::InArbitration)?;
+        require!(!d.panel_drawn, SafeDealError::NotAllowed);
+        require!(clock.unix_timestamp <= d.deadline, SafeDealError::DeadlinePassed);
+        require!(clock.slot > d.draw_slot, SafeDealError::DrawNotReady);
+
+        let Some(seed_hash) = slot_hash_at_or_after(&ctx.accounts.slot_hashes, d.draw_slot)? else {
+            d.draw_slot = clock.slot + DRAW_DELAY;
+            emit!(DrawRescheduled { id: d.id, draw_slot: d.draw_slot });
+            return Ok(());
+        };
+        let panel = pick_panel(&ctx.accounts.pool.members, d.id, &seed_hash, &d.buyer, &d.seller)?;
+        require!(ctx.remaining_accounts.len() >= PANEL, SafeDealError::InvalidParams);
+        for (j, who) in panel.iter().enumerate() {
+            let acc = &ctx.remaining_accounts[j];
+            let (expected, _) = Pubkey::find_program_address(&[ARBITER_SEED, who.as_ref()], &crate::ID);
+            require_keys_eq!(acc.key(), expected, SafeDealError::InvalidParams);
+            let mut a: Account<Arbiter> = Account::try_from(acc)?;
+            a.active_cases += 1;
+            a.cases += 1;
+            a.exit(&crate::ID)?;
+        }
+        d.panel = panel;
+        d.panel_drawn = true;
+        d.deadline = clock.unix_timestamp + c.arbitration_window + c.reveal_window;
+        emit!(PanelDrawn { id: d.id, panel, deadline: d.deadline });
         Ok(())
     }
 
@@ -277,14 +415,14 @@ pub mod safedeal {
 
     // ───────────────────────────── arbitrzy ─────────────────────────────
 
-    /// Faza 1: arbiter zapisuje tylko hash głosu = sha256(id_le ‖ arbiter ‖ za_kupującym ‖ sól).
+    /// Faza 1: arbiter ze składu zapisuje tylko hash głosu = sha256(id_le ‖ arbiter ‖ za_kupującym ‖ sól).
     /// Nikt — także inni arbitrzy — nie wie, jak zagłosował, więc nie da się dopasować do większości.
     pub fn commit_vote(ctx: Context<ArbiterAction>, commitment: [u8; 32]) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let c = &ctx.accounts.config;
-        let idx = arbiter_index(c, &ctx.accounts.arbiter.key())?;
         let d = &mut ctx.accounts.deal;
         expect(d, State::InArbitration)?;
+        let idx = panel_index(d, &ctx.accounts.arbiter.key())?;
         require!(commitment != [0u8; 32], SafeDealError::InvalidParams);
         require!(now <= d.deadline - c.reveal_window, SafeDealError::DeadlinePassed);
         require!(d.commits[idx] == [0u8; 32], SafeDealError::NotAllowed);
@@ -294,30 +432,24 @@ pub mod safedeal {
         Ok(())
     }
 
-    /// Faza 2: ujawnienie głosu. Otwiera się, gdy wszyscy złożyli głosy albo minęła faza 1.
-    /// Gdy jedna strona zbierze kworum, program od razu wypłaca: zwycięzca dostaje kwotę i swoją
-    /// kaucję, kaucja przegranego trafia do arbitrów, którzy głosowali za zwycięzcą.
-    /// `remaining_accounts` = konta tokenowe arbitrów w kolejności z konfiguracji.
-    pub fn reveal_vote<'info>(
-        ctx: Context<'_, '_, 'info, 'info, Payout<'info>>,
-        for_buyer: bool,
-        salt: [u8; 32],
-    ) -> Result<()> {
+    /// Faza 2: ujawnienie głosu. Otwiera się, gdy cały skład złożył głosy albo minęła faza 1.
+    /// Gdy jedna strona zbierze kworum, program od razu wypłaca zwycięzcy kwotę i jego kaucję;
+    /// kaucja przegranego czeka w sejfie na arbitrów, którzy głosowali za zwycięzcą (`settle_arbiter`).
+    pub fn reveal_vote(ctx: Context<Payout>, for_buyer: bool, salt: [u8; 32]) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let arbiter = ctx.accounts.actor.key();
-        let idx = arbiter_index(&ctx.accounts.config, &arbiter)?;
         let reveal_window = ctx.accounts.config.reveal_window;
         let quorum = ctx.accounts.config.arbiter_quorum;
-        let n_arb = ctx.accounts.config.arbiters.len();
         {
             let d = &mut ctx.accounts.deal;
             expect(d, State::InArbitration)?;
+            let idx = panel_index(d, &arbiter)?;
             require!(now <= d.deadline, SafeDealError::DeadlinePassed);
-            let open = d.commit_count as usize >= n_arb || now > d.deadline - reveal_window;
+            let open = d.commit_count as usize >= PANEL || now > d.deadline - reveal_window;
             require!(open, SafeDealError::RevealNotOpen);
             require!(d.commits[idx] != [0u8; 32] && d.votes[idx] == 0, SafeDealError::NotAllowed);
             require!(d.commits[idx] == vote_commitment(d.id, &arbiter, for_buyer, &salt), SafeDealError::BadReveal);
-            d.votes[idx] = if for_buyer { 1 } else { 2 };
+            d.votes[idx] = if for_buyer { VERDICT_BUYER } else { VERDICT_SELLER };
             emit!(Voted { id: d.id, arbiter, for_buyer });
             if for_buyer {
                 d.votes_buyer += 1;
@@ -327,10 +459,85 @@ pub mod safedeal {
         }
         let a = ctx.accounts;
         if a.deal.votes_buyer >= quorum {
-            resolve(a, ctx.remaining_accounts, true)?;
+            resolve(a, true)?;
         } else if a.deal.votes_seller >= quorum {
-            resolve(a, ctx.remaining_accounts, false)?;
+            resolve(a, false)?;
         }
+        Ok(())
+    }
+
+    /// Rozliczenie jednego arbitra ze składu po zamknięciu sporu (może wywołać każdy): nagroda z kaucji
+    /// przegranego dla głosujących za zwycięzcą, kara (spalenie części kaucji) dla nieobecnych,
+    /// statystyki rzetelności i zwolnienie sprawy, żeby arbiter mógł wyjść z puli.
+    pub fn settle_arbiter(ctx: Context<SettleArbiter>, index: u8) -> Result<()> {
+        let i = index as usize;
+        require!(i < PANEL, SafeDealError::InvalidParams);
+        let c = &ctx.accounts.config;
+        let d = &mut ctx.accounts.deal;
+        require!(is_closed(d.state) && d.panel_drawn, SafeDealError::WrongState);
+        require!(d.panel_settled & (1 << i) == 0, SafeDealError::NotAllowed);
+        require_keys_eq!(ctx.accounts.arbiter.owner, d.panel[i], SafeDealError::InvalidParams);
+        require_keys_eq!(ctx.accounts.arbiter_ata.owner, d.panel[i], SafeDealError::NotAllowed);
+        d.panel_settled |= 1 << i;
+
+        let vote = d.votes[i];
+        let mut reward = 0u64;
+        let mut missed = false;
+        let a = &mut ctx.accounts.arbiter;
+        match d.verdict {
+            VERDICT_BUYER | VERDICT_SELLER => {
+                if vote == d.verdict {
+                    a.with_majority += 1;
+                    reward = d.reward_share;
+                } else if vote != 0 {
+                    a.against_majority += 1;
+                } else if d.commits[i] == [0u8; 32] {
+                    // Nie złożył głosu w fazie 1. Kto złożył, ale nie zdążył ujawnić przed werdyktem
+                    // większości, nie jest karany — mógł ujawniać jako ostatni.
+                    missed = true;
+                }
+            }
+            VERDICT_SPLIT => missed = vote == 0,
+            _ => {}
+        }
+        a.active_cases = a.active_cases.saturating_sub(1);
+        let mut slashed = 0u64;
+        if missed {
+            a.missed += 1;
+            slashed = c.miss_slash.min(a.stake);
+            a.stake -= slashed;
+        }
+        let drop_out = a.in_pool && a.stake < c.arbiter_stake;
+        if drop_out {
+            a.in_pool = false;
+        }
+        let who = a.owner;
+
+        if reward > 0 {
+            pay_raw(d, &ctx.accounts.vault, &ctx.accounts.arbiter_ata.to_account_info(), &ctx.accounts.token_program, reward)?;
+        }
+        let pool = &mut ctx.accounts.pool;
+        if drop_out {
+            if let Some(p) = pool.members.iter().position(|m| *m == who) {
+                pool.members.swap_remove(p);
+            }
+        }
+        if slashed > 0 {
+            let seeds: &[&[u8]] = &[POOL_SEED, &[pool.bump]];
+            token::burn(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    Burn {
+                        mint: ctx.accounts.mint.to_account_info(),
+                        from: ctx.accounts.pool_vault.to_account_info(),
+                        authority: pool.to_account_info(),
+                    },
+                    &[seeds],
+                ),
+                slashed,
+            )?;
+        }
+        emit!(ArbiterSettled { id: d.id, arbiter: who, reward, slashed, removed: drop_out });
         Ok(())
     }
 
@@ -376,8 +583,7 @@ pub mod safedeal {
             rep_dispute(a, true);
         }
         pay(a, &a.buyer_ata, payout)?;
-        close(&mut a.deal, State::Refunded);
-        Ok(())
+        close(&mut a.deal, State::Refunded)
     }
 
     /// Strona proponuje podział, np. "oddaj mi 30%, rama jest porysowana". Nowa propozycja zastępuje
@@ -416,8 +622,8 @@ pub mod safedeal {
         pay(a, &a.seller_ata, seller_amount + seller_bond)?;
         emit!(Settled { id, buyer_amount, seller_amount });
         a.deal.settlement_proposer = Pubkey::default();
-        close(&mut a.deal, State::Settled);
-        Ok(())
+        a.deal.verdict = VERDICT_NONE;
+        close(&mut a.deal, State::Settled)
     }
 
     /// Każdy może "pchnąć" transakcję po upływie terminu. Wynik zależy tylko od stanu:
@@ -436,28 +642,78 @@ pub mod safedeal {
         match s {
             State::Funded => {
                 pay(a, &a.buyer_ata, amount)?;
-                close(&mut a.deal, State::Refunded);
+                close(&mut a.deal, State::Refunded)?;
             }
             State::Shipped | State::Delivered => release(a)?,
             State::Disputed => {
                 rep_dispute(a, true);
                 pay(a, &a.buyer_ata, amount + bond)?;
-                close(&mut a.deal, State::Refunded);
+                close(&mut a.deal, State::Refunded)?;
             }
             _ => {
-                // Arbitraż bez rozstrzygnięcia: podział po połowie, kaucje wracają. Arbitrzy, którzy
-                // nie ujawnili głosu, dostają odnotowaną nieobecność (podstawa do wymiany składu).
-                for i in 0..a.config.arbiters.len() {
-                    if a.deal.votes[i] == 0 {
-                        a.config.arb_missed[i] += 1;
-                    }
-                }
+                // Arbitraż bez rozstrzygnięcia: podział po połowie, kaucje wracają. Arbitrzy ze składu,
+                // którzy nie ujawnili głosu, tracą część kaucji przy `settle_arbiter`.
                 let half = amount / 2;
                 pay(a, &a.buyer_ata, half + bond)?;
                 pay(a, &a.seller_ata, amount - half + bond)?;
-                close(&mut a.deal, State::Split);
+                a.deal.verdict = VERDICT_SPLIT;
+                close(&mut a.deal, State::Split)?;
             }
         }
+        Ok(())
+    }
+
+    // ───────────────────────────── zamknięcie kont ─────────────────────────────
+
+    /// Porządki po rozliczeniu (może wywołać każdy): zamyka sejf i konto transakcji, a rent wraca do
+    /// sprzedawcy, który za nie zapłacił — adres jest przypięty, wywołujący nie może go podmienić.
+    /// Warunki: transakcja zamknięta, arbitrzy rozliczeni, obie opinie wystawione albo minęło okno
+    /// na opinie. Pełny opis zostaje w zdarzeniu `DealArchived` (historia łańcucha).
+    pub fn close_deal(ctx: Context<CloseDeal>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let c = &ctx.accounts.config;
+        let d = &ctx.accounts.deal;
+        require!(is_closed(d.state), SafeDealError::WrongState);
+        let all = (1u8 << PANEL) - 1;
+        require!(!d.panel_drawn || d.panel_settled == all, SafeDealError::ArbitersNotSettled);
+        let reviews_done = d.state == State::Cancelled as u8 || (d.reviewed_by_buyer && d.reviewed_by_seller);
+        require!(reviews_done || now > d.closed_at + c.archive_window, SafeDealError::DeadlineNotReached);
+
+        // Ewentualne tokeny wpłacone do sejfu z zewnątrz (nie mogą zablokować zamknięcia) → sprzedawca.
+        let leftover = ctx.accounts.vault.amount;
+        if leftover > 0 {
+            pay_raw(d, &ctx.accounts.vault, &ctx.accounts.seller_ata.to_account_info(), &ctx.accounts.token_program, leftover)?;
+        }
+        let id = d.id.to_le_bytes();
+        let seeds: &[&[u8]] = &[DEAL_SEED, &id, &[d.bump]];
+        token::close_account(CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            CloseAccount {
+                account: ctx.accounts.vault.to_account_info(),
+                destination: ctx.accounts.seller.to_account_info(),
+                authority: d.to_account_info(),
+            },
+            &[seeds],
+        ))?;
+        emit!(DealArchived {
+            id: d.id,
+            seller: d.seller,
+            buyer: d.buyer,
+            amount: d.amount,
+            bond: d.bond,
+            state: d.state,
+            created_at: d.created_at,
+            closed_at: d.closed_at,
+            title: d.title.clone(),
+            description: d.description.clone(),
+            photo_uri: d.photo_uri.clone(),
+            photo_hash: d.photo_hash,
+            tracking: d.tracking.clone(),
+            dispute_reason: d.dispute_reason.clone(),
+            pickup: d.pickup_hash != [0u8; 32],
+            panel: d.panel,
+            votes: d.votes,
+        });
         Ok(())
     }
 
@@ -514,10 +770,16 @@ fn expect(d: &Deal, s: State) -> Result<()> {
     Ok(())
 }
 
-fn close(d: &mut Deal, outcome: State) {
+fn is_closed(state: u8) -> bool {
+    state >= State::Released as u8 && state <= State::Settled as u8
+}
+
+fn close(d: &mut Deal, outcome: State) -> Result<()> {
     d.state = outcome as u8;
     d.deadline = 0;
+    d.closed_at = Clock::get()?.unix_timestamp;
     emit!(DealClosed { id: d.id, outcome: outcome as u8 });
+    Ok(())
 }
 
 fn init_profile(p: &mut Account<Profile>, owner: Pubkey, bump: u8) {
@@ -527,12 +789,49 @@ fn init_profile(p: &mut Account<Profile>, owner: Pubkey, bump: u8) {
     }
 }
 
-fn arbiter_index(c: &Config, who: &Pubkey) -> Result<usize> {
-    c.arbiters.iter().position(|a| a == who).ok_or(error!(SafeDealError::NotAllowed))
+fn panel_index(d: &Deal, who: &Pubkey) -> Result<usize> {
+    require!(d.panel_drawn, SafeDealError::NotAllowed);
+    d.panel.iter().position(|a| a == who).ok_or(error!(SafeDealError::NotAllowed))
 }
 
 pub fn vote_commitment(id: u64, arbiter: &Pubkey, for_buyer: bool, salt: &[u8; 32]) -> [u8; 32] {
     hashv(&[id.to_le_bytes().as_ref(), arbiter.as_ref(), &[for_buyer as u8], salt.as_ref()]).to_bytes()
+}
+
+/// Hash najwcześniejszego slotu ≥ `target` z sysvaru SlotHashes (wpisy od najnowszego). `None`, gdy
+/// historia nie sięga już `target` — wtedy nie da się udowodnić, który slot był pierwszy.
+fn slot_hash_at_or_after(sysvar: &AccountInfo, target: u64) -> Result<Option<[u8; 32]>> {
+    let data = sysvar.try_borrow_data()?;
+    require!(data.len() >= 8, SafeDealError::InvalidParams);
+    let n = u64::from_le_bytes(data[0..8].try_into().unwrap()) as usize;
+    let mut found: Option<[u8; 32]> = None;
+    for i in 0..n {
+        let off = 8 + i * 40;
+        if off + 40 > data.len() {
+            break;
+        }
+        let slot = u64::from_le_bytes(data[off..off + 8].try_into().unwrap());
+        if slot < target {
+            return Ok(found);
+        }
+        found = Some(data[off + 8..off + 40].try_into().unwrap());
+    }
+    // Doszliśmy do końca historii bez slotu < target — wcześniejszy slot ≥ target mógł z niej wypaść.
+    Ok(None)
+}
+
+/// Deterministyczne losowanie składu: dla j = 0..PANEL indeks = sha256(seed ‖ id ‖ j) mod liczba
+/// kandydatów, bez powtórzeń. Kandydaci = pula bez kupującego i sprzedawcy, w kolejności z puli.
+pub fn pick_panel(members: &[Pubkey], id: u64, seed: &[u8; 32], buyer: &Pubkey, seller: &Pubkey) -> Result<[Pubkey; PANEL]> {
+    let mut cand: Vec<Pubkey> = members.iter().filter(|m| *m != buyer && *m != seller).copied().collect();
+    require!(cand.len() >= PANEL, SafeDealError::PoolTooSmall);
+    let mut panel = [Pubkey::default(); PANEL];
+    for (j, slot) in panel.iter_mut().enumerate() {
+        let h = hashv(&[seed.as_ref(), id.to_le_bytes().as_ref(), &[j as u8]]).to_bytes();
+        let r = u64::from_le_bytes(h[0..8].try_into().unwrap()) as usize % cand.len();
+        *slot = cand.remove(r);
+    }
+    Ok(panel)
 }
 
 fn deposit<'info>(
@@ -566,7 +865,7 @@ fn pay_raw<'info>(
         return Ok(());
     }
     let id = deal.id.to_le_bytes();
-    let seeds: &[&[u8]] = &[b"deal", &id, &[deal.bump]];
+    let seeds: &[&[u8]] = &[DEAL_SEED, &id, &[deal.bump]];
     token::transfer(
         CpiContext::new_with_signer(
             token_program.to_account_info(),
@@ -595,47 +894,26 @@ fn release(a: &mut Payout) -> Result<()> {
     a.seller_profile.sold_ok += 1;
     a.buyer_profile.bought_ok += 1;
     pay(a, &a.seller_ata, a.deal.amount)?;
-    close(&mut a.deal, State::Released);
-    Ok(())
+    close(&mut a.deal, State::Released)
 }
 
-fn resolve<'info>(a: &mut Payout<'info>, remaining: &'info [AccountInfo<'info>], buyer_wins: bool) -> Result<()> {
-    let winning: u8 = if buyer_wins { 1 } else { 2 };
+/// Werdykt większości: zwycięzca dostaje kwotę, własną kaucję i resztę z dzielenia kaucji
+/// przegranego; udziały arbitrów zostają w sejfie do `settle_arbiter`.
+fn resolve(a: &mut Payout, buyer_wins: bool) -> Result<()> {
     let rewarded = if buyer_wins { a.deal.votes_buyer } else { a.deal.votes_seller } as u64;
     let (amount, bond) = (a.deal.amount, a.deal.bond);
     let share = bond / rewarded;
-    let n = a.config.arbiters.len();
-    require!(remaining.len() >= n, SafeDealError::InvalidParams);
 
     rep_dispute(a, buyer_wins);
     if !buyer_wins {
         a.seller_profile.sold_ok += 1;
         a.buyer_profile.bought_ok += 1;
     }
-
-    // Zwycięzca: kwota + własna kaucja + reszta z dzielenia kaucji przegranego.
     let winner_ata = if buyer_wins { &a.buyer_ata } else { &a.seller_ata };
     pay(a, winner_ata, amount + bond + (bond - share * rewarded))?;
-
-    // Kaucja przegranego trafia do arbitrów, którzy głosowali za zwycięzcą.
-    for i in 0..n {
-        let v = a.deal.votes[i];
-        if v == winning {
-            a.config.arb_with_majority[i] += 1;
-            let acc = &remaining[i];
-            let ta: Account<TokenAccount> = Account::try_from(acc)?;
-            require!(ta.owner == a.config.arbiters[i] && ta.mint == a.config.mint, SafeDealError::InvalidParams);
-            pay_raw(&a.deal, &a.vault, acc, &a.token_program, share)?;
-        } else if v != 0 {
-            a.config.arb_against_majority[i] += 1;
-        } else if a.deal.commits[i] == [0u8; 32] {
-            // Nie złożył głosu w fazie 1. Kto złożył, ale nie zdążył ujawnić przed rozstrzygnięciem
-            // przez większość, nie jest karany — mógł ujawniać jako ostatni.
-            a.config.arb_missed[i] += 1;
-        }
-    }
-    close(&mut a.deal, if buyer_wins { State::Refunded } else { State::Released });
-    Ok(())
+    a.deal.reward_share = share;
+    a.deal.verdict = if buyer_wins { VERDICT_BUYER } else { VERDICT_SELLER };
+    close(&mut a.deal, if buyer_wins { State::Refunded } else { State::Released })
 }
 
 // ───────────────────────────── konta ─────────────────────────────
@@ -647,21 +925,46 @@ pub struct Config {
     #[max_len(MAX_ORACLES)]
     pub oracles: Vec<Pubkey>,
     pub oracle_quorum: u8,
-    #[max_len(MAX_ARBITERS)]
-    pub arbiters: Vec<Pubkey>,
+    /// Ile zgodnych głosów (z `PANEL`) rozstrzyga spór.
     pub arbiter_quorum: u8,
+    /// Minimalna kaucja arbitra w puli.
+    pub arbiter_stake: u64,
+    /// Kara (spalana z kaucji) za nieoddanie głosu w wylosowanej sprawie.
+    pub miss_slash: u64,
     pub ship_window: i64,
     pub transit_window: i64,
     pub inspection_window: i64,
     pub response_window: i64,
     pub arbitration_window: i64,
     pub reveal_window: i64,
+    /// Po tym czasie od zamknięcia konta transakcji można zamknąć bez kompletu opinii.
+    pub archive_window: i64,
     pub bond_bps: u16,
     pub deal_count: u64,
-    /// Rzetelność arbitrów (indeksy jak w `arbiters`): zgodność z werdyktem i obecność.
-    pub arb_with_majority: [u32; MAX_ARBITERS],
-    pub arb_against_majority: [u32; MAX_ARBITERS],
-    pub arb_missed: [u32; MAX_ARBITERS],
+    pub bump: u8,
+}
+
+/// Otwarta pula arbitrów — każdy z kaucją może dołączyć; z niej losowany jest skład do sporu.
+#[account]
+#[derive(InitSpace)]
+pub struct Pool {
+    #[max_len(MAX_POOL)]
+    pub members: Vec<Pubkey>,
+    pub bump: u8,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct Arbiter {
+    pub owner: Pubkey,
+    pub stake: u64,
+    pub in_pool: bool,
+    /// Wylosowane, jeszcze nierozliczone sprawy — do zera nie można wyjść z puli.
+    pub active_cases: u16,
+    pub cases: u32,
+    pub with_majority: u32,
+    pub against_majority: u32,
+    pub missed: u32,
     pub bump: u8,
 }
 
@@ -677,6 +980,7 @@ pub struct Deal {
     pub state: u8,
     pub deadline: i64,
     pub created_at: i64,
+    pub closed_at: i64,
     #[max_len(80)]
     pub title: String,
     #[max_len(500)]
@@ -694,12 +998,21 @@ pub struct Deal {
     pub pickup_hash: [u8; 32],
     pub settlement_proposer: Pubkey,
     pub settlement_buyer_amount: u64,
-    pub commits: [[u8; 32]; MAX_ARBITERS],
-    /// 0 = brak, 1 = za kupującym, 2 = za sprzedawcą (indeksy jak w `Config::arbiters`)
-    pub votes: [u8; MAX_ARBITERS],
+    /// Slot, którego hash wylosuje skład arbitrów.
+    pub draw_slot: u64,
+    pub panel_drawn: bool,
+    pub panel: [Pubkey; PANEL],
+    /// Bity: którzy arbitrzy ze składu zostali już rozliczeni (`settle_arbiter`).
+    pub panel_settled: u8,
+    pub commits: [[u8; 32]; PANEL],
+    /// 0 = brak, 1 = za kupującym, 2 = za sprzedawcą (indeksy jak w `panel`)
+    pub votes: [u8; PANEL],
     pub commit_count: u8,
     pub votes_buyer: u8,
     pub votes_seller: u8,
+    pub verdict: u8,
+    /// Udział każdego arbitra głosującego za zwycięzcą w kaucji przegranego.
+    pub reward_share: u64,
     pub reviewed_by_buyer: bool,
     pub reviewed_by_seller: bool,
     pub bump: u8,
@@ -724,14 +1037,16 @@ pub struct Profile {
 pub struct InitParams {
     pub oracles: Vec<Pubkey>,
     pub oracle_quorum: u8,
-    pub arbiters: Vec<Pubkey>,
     pub arbiter_quorum: u8,
+    pub arbiter_stake: u64,
+    pub miss_slash: u64,
     pub ship_window: i64,
     pub transit_window: i64,
     pub inspection_window: i64,
     pub response_window: i64,
     pub arbitration_window: i64,
     pub reveal_window: i64,
+    pub archive_window: i64,
     pub bond_bps: u16,
 }
 
@@ -750,9 +1065,15 @@ pub struct CreateDealArgs {
 pub struct Initialize<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(init, payer = payer, space = 8 + Config::INIT_SPACE, seeds = [b"config"], bump)]
+    #[account(init, payer = payer, space = 8 + Config::INIT_SPACE, seeds = [CONFIG_SEED], bump)]
     pub config: Account<'info, Config>,
+    #[account(init, payer = payer, space = 8 + Pool::INIT_SPACE, seeds = [POOL_SEED], bump)]
+    pub pool: Account<'info, Pool>,
+    /// Sejf kaucji arbitrów — właścicielem jest PDA puli, nie człowiek.
+    #[account(init, payer = payer, seeds = [POOL_VAULT_SEED], bump, token::mint = mint, token::authority = pool)]
+    pub pool_vault: Account<'info, TokenAccount>,
     pub mint: Account<'info, Mint>,
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
 }
 
@@ -760,7 +1081,7 @@ pub struct Initialize<'info> {
 pub struct Faucet<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
-    #[account(seeds = [b"config"], bump = config.bump, has_one = mint)]
+    #[account(seeds = [CONFIG_SEED], bump = config.bump, has_one = mint)]
     pub config: Account<'info, Config>,
     #[account(mut)]
     pub mint: Account<'info, Mint>,
@@ -775,16 +1096,56 @@ pub struct Faucet<'info> {
 }
 
 #[derive(Accounts)]
+pub struct JoinPool<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(mut, seeds = [POOL_SEED], bump = pool.bump)]
+    pub pool: Account<'info, Pool>,
+    #[account(mut, seeds = [POOL_VAULT_SEED], bump)]
+    pub pool_vault: Account<'info, TokenAccount>,
+    #[account(
+        init_if_needed,
+        payer = owner,
+        space = 8 + Arbiter::INIT_SPACE,
+        seeds = [ARBITER_SEED, owner.key().as_ref()],
+        bump
+    )]
+    pub arbiter: Account<'info, Arbiter>,
+    #[account(mut, token::mint = config.mint, token::authority = owner)]
+    pub owner_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct LeavePool<'info> {
+    pub owner: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(mut, seeds = [POOL_SEED], bump = pool.bump)]
+    pub pool: Account<'info, Pool>,
+    #[account(mut, seeds = [POOL_VAULT_SEED], bump)]
+    pub pool_vault: Account<'info, TokenAccount>,
+    #[account(mut, seeds = [ARBITER_SEED, owner.key().as_ref()], bump = arbiter.bump, has_one = owner)]
+    pub arbiter: Account<'info, Arbiter>,
+    #[account(mut, token::mint = config.mint, token::authority = owner)]
+    pub owner_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
 pub struct CreateDeal<'info> {
     #[account(mut)]
     pub seller: Signer<'info>,
-    #[account(mut, seeds = [b"config"], bump = config.bump, has_one = mint)]
+    #[account(mut, seeds = [CONFIG_SEED], bump = config.bump, has_one = mint)]
     pub config: Account<'info, Config>,
     #[account(
         init,
         payer = seller,
         space = 8 + Deal::INIT_SPACE,
-        seeds = [b"deal", (config.deal_count + 1).to_le_bytes().as_ref()],
+        seeds = [DEAL_SEED, (config.deal_count + 1).to_le_bytes().as_ref()],
         bump
     )]
     pub deal: Account<'info, Deal>,
@@ -792,7 +1153,7 @@ pub struct CreateDeal<'info> {
     #[account(
         init,
         payer = seller,
-        seeds = [b"vault", deal.key().as_ref()],
+        seeds = [VAULT_SEED, deal.key().as_ref()],
         bump,
         token::mint = mint,
         token::authority = deal
@@ -814,46 +1175,99 @@ pub struct CreateDeal<'info> {
 #[derive(Accounts)]
 pub struct SellerAction<'info> {
     pub seller: Signer<'info>,
-    #[account(seeds = [b"config"], bump = config.bump)]
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Account<'info, Config>,
-    #[account(mut, seeds = [b"deal", deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
+    #[account(mut, seeds = [DEAL_SEED, deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
     pub deal: Account<'info, Deal>,
 }
 
 #[derive(Accounts)]
 pub struct PartyAction<'info> {
     pub actor: Signer<'info>,
-    #[account(mut, seeds = [b"deal", deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
+    #[account(mut, seeds = [DEAL_SEED, deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
     pub deal: Account<'info, Deal>,
 }
 
 #[derive(Accounts)]
 pub struct OracleAction<'info> {
     pub oracle: Signer<'info>,
-    #[account(seeds = [b"config"], bump = config.bump)]
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Account<'info, Config>,
-    #[account(mut, seeds = [b"deal", deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
+    #[account(mut, seeds = [DEAL_SEED, deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
     pub deal: Account<'info, Deal>,
 }
 
 #[derive(Accounts)]
 pub struct ArbiterAction<'info> {
     pub arbiter: Signer<'info>,
-    #[account(seeds = [b"config"], bump = config.bump)]
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Account<'info, Config>,
-    #[account(mut, seeds = [b"deal", deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
+    #[account(mut, seeds = [DEAL_SEED, deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
     pub deal: Account<'info, Deal>,
+}
+
+#[derive(Accounts)]
+pub struct DrawPanel<'info> {
+    pub actor: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(seeds = [POOL_SEED], bump = pool.bump)]
+    pub pool: Account<'info, Pool>,
+    #[account(mut, seeds = [DEAL_SEED, deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
+    pub deal: Account<'info, Deal>,
+    /// CHECK: sysvar SlotHashes (adres sprawdzony), czytany ręcznie — jest za duży na deserializację.
+    #[account(address = slot_hashes::ID)]
+    pub slot_hashes: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SettleArbiter<'info> {
+    pub actor: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump, has_one = mint)]
+    pub config: Account<'info, Config>,
+    #[account(mut, seeds = [POOL_SEED], bump = pool.bump)]
+    pub pool: Account<'info, Pool>,
+    #[account(mut, seeds = [POOL_VAULT_SEED], bump)]
+    pub pool_vault: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub mint: Account<'info, Mint>,
+    #[account(mut, seeds = [DEAL_SEED, deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
+    pub deal: Account<'info, Deal>,
+    #[account(mut, seeds = [VAULT_SEED, deal.key().as_ref()], bump = deal.vault_bump)]
+    pub vault: Account<'info, TokenAccount>,
+    #[account(mut, seeds = [ARBITER_SEED, arbiter.owner.as_ref()], bump = arbiter.bump)]
+    pub arbiter: Account<'info, Arbiter>,
+    #[account(mut, token::mint = config.mint)]
+    pub arbiter_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct CloseDeal<'info> {
+    pub actor: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(mut, close = seller, seeds = [DEAL_SEED, deal.id.to_le_bytes().as_ref()], bump = deal.bump, has_one = seller)]
+    pub deal: Account<'info, Deal>,
+    #[account(mut, seeds = [VAULT_SEED, deal.key().as_ref()], bump = deal.vault_bump)]
+    pub vault: Account<'info, TokenAccount>,
+    /// CHECK: odbiorca rentu — przypięty do sprzedawcy zapisanego w transakcji (`has_one`).
+    #[account(mut)]
+    pub seller: UncheckedAccount<'info>,
+    #[account(mut, token::mint = config.mint, constraint = seller_ata.owner == deal.seller @ SafeDealError::NotAllowed)]
+    pub seller_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
 pub struct Fund<'info> {
     #[account(mut)]
     pub buyer: Signer<'info>,
-    #[account(seeds = [b"config"], bump = config.bump)]
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Account<'info, Config>,
-    #[account(mut, seeds = [b"deal", deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
+    #[account(mut, seeds = [DEAL_SEED, deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
     pub deal: Account<'info, Deal>,
-    #[account(mut, seeds = [b"vault", deal.key().as_ref()], bump = deal.vault_bump)]
+    #[account(mut, seeds = [VAULT_SEED, deal.key().as_ref()], bump = deal.vault_bump)]
     pub vault: Account<'info, TokenAccount>,
     #[account(mut, token::mint = config.mint, token::authority = buyer)]
     pub buyer_ata: Account<'info, TokenAccount>,
@@ -873,11 +1287,11 @@ pub struct Fund<'info> {
 #[derive(Accounts)]
 pub struct PartyDeposit<'info> {
     pub actor: Signer<'info>,
-    #[account(seeds = [b"config"], bump = config.bump)]
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Account<'info, Config>,
-    #[account(mut, seeds = [b"deal", deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
+    #[account(mut, seeds = [DEAL_SEED, deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
     pub deal: Account<'info, Deal>,
-    #[account(mut, seeds = [b"vault", deal.key().as_ref()], bump = deal.vault_bump)]
+    #[account(mut, seeds = [VAULT_SEED, deal.key().as_ref()], bump = deal.vault_bump)]
     pub vault: Account<'info, TokenAccount>,
     #[account(mut, token::mint = config.mint, token::authority = actor)]
     pub actor_ata: Account<'info, TokenAccount>,
@@ -889,11 +1303,11 @@ pub struct PartyDeposit<'info> {
 #[derive(Accounts)]
 pub struct Payout<'info> {
     pub actor: Signer<'info>,
-    #[account(mut, seeds = [b"config"], bump = config.bump)]
+    #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Account<'info, Config>,
-    #[account(mut, seeds = [b"deal", deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
+    #[account(mut, seeds = [DEAL_SEED, deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
     pub deal: Account<'info, Deal>,
-    #[account(mut, seeds = [b"vault", deal.key().as_ref()], bump = deal.vault_bump)]
+    #[account(mut, seeds = [VAULT_SEED, deal.key().as_ref()], bump = deal.vault_bump)]
     pub vault: Account<'info, TokenAccount>,
     #[account(mut, token::mint = config.mint, constraint = buyer_ata.owner == deal.buyer @ SafeDealError::NotAllowed)]
     pub buyer_ata: Account<'info, TokenAccount>,
@@ -909,7 +1323,7 @@ pub struct Payout<'info> {
 #[derive(Accounts)]
 pub struct Review<'info> {
     pub author: Signer<'info>,
-    #[account(mut, seeds = [b"deal", deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
+    #[account(mut, seeds = [DEAL_SEED, deal.id.to_le_bytes().as_ref()], bump = deal.bump)]
     pub deal: Account<'info, Deal>,
     #[account(mut, seeds = [b"profile", subject_profile.owner.as_ref()], bump = subject_profile.bump)]
     pub subject_profile: Account<'info, Profile>,
@@ -930,13 +1344,43 @@ pub struct DealDelivered { pub id: u64, pub deadline: i64 }
 #[event]
 pub struct DisputeOpened { pub id: u64, pub reason: String, pub deadline: i64 }
 #[event]
-pub struct ArbitrationStarted { pub id: u64, pub deadline: i64 }
+pub struct ArbitrationStarted { pub id: u64, pub deadline: i64, pub draw_slot: u64 }
+#[event]
+pub struct DrawRescheduled { pub id: u64, pub draw_slot: u64 }
+#[event]
+pub struct PanelDrawn { pub id: u64, pub panel: [Pubkey; PANEL], pub deadline: i64 }
 #[event]
 pub struct VoteCommitted { pub id: u64, pub arbiter: Pubkey }
 #[event]
 pub struct Voted { pub id: u64, pub arbiter: Pubkey, pub for_buyer: bool }
 #[event]
+pub struct ArbiterSettled { pub id: u64, pub arbiter: Pubkey, pub reward: u64, pub slashed: u64, pub removed: bool }
+#[event]
+pub struct ArbiterJoined { pub arbiter: Pubkey, pub stake: u64 }
+#[event]
+pub struct ArbiterLeft { pub arbiter: Pubkey, pub stake: u64 }
+#[event]
 pub struct DealClosed { pub id: u64, pub outcome: u8 }
+#[event]
+pub struct DealArchived {
+    pub id: u64,
+    pub seller: Pubkey,
+    pub buyer: Pubkey,
+    pub amount: u64,
+    pub bond: u64,
+    pub state: u8,
+    pub created_at: i64,
+    pub closed_at: i64,
+    pub title: String,
+    pub description: String,
+    pub photo_uri: String,
+    pub photo_hash: [u8; 32],
+    pub tracking: String,
+    pub dispute_reason: String,
+    pub pickup: bool,
+    pub panel: [Pubkey; PANEL],
+    pub votes: [u8; PANEL],
+}
 #[event]
 pub struct SettlementProposed { pub id: u64, pub proposer: Pubkey, pub buyer_amount: u64 }
 #[event]
@@ -966,4 +1410,14 @@ pub enum SafeDealError {
     BadReveal,
     #[msg("Propozycja ugody właśnie się zmieniła — sprawdź nową kwotę.")]
     OfferMismatch,
+    #[msg("Losowanie arbitrów będzie możliwe za chwilę (czekamy na przyszły slot).")]
+    DrawNotReady,
+    #[msg("W puli jest za mało arbitrów, żeby wylosować skład.")]
+    PoolTooSmall,
+    #[msg("Pula arbitrów jest pełna.")]
+    PoolFull,
+    #[msg("Arbiter ma nierozliczone sprawy.")]
+    ArbiterBusy,
+    #[msg("Najpierw trzeba rozliczyć arbitrów tej sprawy.")]
+    ArbitersNotSettled,
 }
