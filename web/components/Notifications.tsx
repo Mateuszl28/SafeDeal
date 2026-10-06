@@ -100,7 +100,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     const program = w.program;
     busy.current = true;
     (async () => {
-      const deals = await fetchAllDeals(program);
+      const deals = await fetchAllDeals(program, true);
       const prev = snaps.current;
       const next: Record<string, Snap> = {};
       for (const d of deals) next[String(d.id)] = snap(d);
@@ -115,6 +115,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       };
 
       for (const d of deals) {
+        // Zamknięcie kont to tylko porządki — dane z archiwum (np. znaczniki opinii) nie są nowymi zdarzeniami.
+        if (d.archived) continue;
         const before = prev[String(d.id)];
         const now = next[String(d.id)];
         const t = `„${d.title}”`;

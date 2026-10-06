@@ -30,7 +30,7 @@ export function useAllDeals() {
   useEffect(() => {
     if (!w.deployment || !w.program) return setDeals([]);
     let alive = true;
-    fetchAllDeals(w.program)
+    fetchAllDeals(w.program, true)
       .then((d) => alive && setDeals(d))
       .catch(() => alive && setDeals([]));
     return () => {

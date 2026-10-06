@@ -173,9 +173,48 @@ export async function fetchDeal(program: Program, d: Deployment, id: bigint): Pr
  * ale historia adresu zostaje w łańcuchu — odtwarzamy ją ze zdarzenia `DealArchived`.
  */
 export async function fetchArchivedDeal(connection: Connection, d: Deployment, id: bigint): Promise<Deal | null> {
+  const key = `${d.programId}:${id}`;
+  if (archiveCache.has(key)) return archiveCache.get(key)!;
+  const stored = readArchive(key);
+  if (stored) {
+    archiveCache.set(key, stored);
+    return stored;
+  }
   const pda = pdas(d.programId).deal(id);
-  const ev = (await accountEvents(connection, d, pda.toBase58(), 60)).find((e) => e.name === "DealArchived");
+  // Zamknięcie jest zwykle ostatnią operacją na koncie — najpierw kilka najnowszych podpisów, w razie potrzeby więcej.
+  let ev = (await accountEvents(connection, d, pda.toBase58(), 5)).find((e) => e.name === "DealArchived");
+  if (!ev) ev = (await accountEvents(connection, d, pda.toBase58(), 60)).find((e) => e.name === "DealArchived");
   if (!ev) return null;
+  const deal = archivedFromEvent(pda, id, ev);
+  archiveCache.set(key, deal);
+  writeArchive(key, deal);
+  return deal;
+}
+
+// Zamknięta transakcja już się nie zmieni — odtworzoną z historii trzymamy w pamięci i w przeglądarce.
+const archiveCache = new Map<string, Deal>();
+const ARCHIVE_PREFIX = "safedeal:archive:";
+
+function readArchive(key: string): Deal | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(ARCHIVE_PREFIX + key);
+    return raw ? (JSON.parse(raw, (_, v) => (v && typeof v === "object" && "$big" in v ? BigInt(v.$big) : v)) as Deal) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeArchive(key: string, deal: Deal) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(ARCHIVE_PREFIX + key, JSON.stringify(deal, (_, v) => (typeof v === "bigint" ? { $big: v.toString() } : v)));
+  } catch {
+    /* brak miejsca lub dostępu — następnym razem odczytamy z sieci */
+  }
+}
+
+function archivedFromEvent(pda: PublicKey, id: bigint, ev: ChainEvent): Deal {
   const a = ev.data as any;
   return {
     id,
@@ -234,8 +273,10 @@ export async function fetchArbiters(program: Program, owners: Address[]): Promis
 /**
  * Wszystkie transakcje programu, od najnowszej. Bez getProgramAccounts (darmowe plany RPC go nie mają):
  * licznik z konta konfiguracji, a konta ofert pobieramy po adresach PDA paczkami po 100.
+ * `withArchived`: transakcje z zamkniętymi kontami odtwarzamy z historii (zdarzenie DealArchived) — listy,
+ * profile i statystyki nie gubią rozliczonych transakcji, gdy relayer zamknie ich konta.
  */
-export async function fetchAllDeals(program: Program): Promise<Deal[]> {
+export async function fetchAllDeals(program: Program, withArchived = false): Promise<Deal[]> {
   const p = pdas(program.programId.toBase58());
   const cfg = await (program.account as any).config.fetch(p.config());
   const count = Number(cfg.dealCount.toString());
@@ -248,7 +289,21 @@ export async function fetchAllDeals(program: Program): Promise<Deal[]> {
       if (info) out.push(toDeal(chunk[j], program.coder.accounts.decode("deal", info.data)));
     });
   }
-  return out;
+  if (!withArchived || out.length === count) return out;
+
+  const programId = program.programId.toBase58();
+  const live = new Set(out.map((x) => x.id));
+  const missing = Array.from({ length: count }, (_, i) => BigInt(count - i)).filter((id) => !live.has(id));
+  const d = { programId } as Deployment; // fetchArchivedDeal potrzebuje tylko adresu programu
+  const archived: Deal[] = [];
+  // Po kilka naraz — publiczne RPC devnetu ma limity zapytań.
+  for (let i = 0; i < missing.length; i += 4) {
+    const part = await Promise.all(
+      missing.slice(i, i + 4).map((id) => fetchArchivedDeal(program.provider.connection, d, id).catch(() => null)),
+    );
+    for (const a of part) if (a) archived.push(a);
+  }
+  return [...out, ...archived].sort((a, b) => (a.id > b.id ? -1 : 1));
 }
 
 export async function fetchProfile(program: Program, d: Deployment, owner: Address): Promise<Profile> {
