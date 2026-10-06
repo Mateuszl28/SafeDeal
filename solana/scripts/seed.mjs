@@ -74,7 +74,8 @@ async function main() {
   });
 
   // Zlecenie w etapach: Alicja (wykonawczyni) robi stronę dla Bartka. Każdy etap = osobna transakcja escrow.
-  const project = "piekarnia01";
+  // Unikalny znacznik przy każdym seedzie — inaczej etapy z kolejnych uruchomień trafiłyby do jednego zlecenia.
+  const project = `piekarnia${Date.now().toString(36).slice(-6)}`;
   const stages = [["Projekt graficzny", 300], ["Wdrożenie", 500], ["Poprawki", 200]];
   const ids = [];
   for (const [i, [name, price]] of stages.entries()) {
