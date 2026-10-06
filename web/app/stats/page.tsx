@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useAllDeals, type Row } from "@/components/DealList";
-import { State } from "@/lib/contracts";
+import { State, type ArbiterAccount } from "@/lib/contracts";
 import { fmtUsdc, plural } from "@/lib/format";
 import { useWallet } from "@/lib/wallet";
+import { fetchArbiters, fetchPool, pdas } from "@/lib/solana";
 import { ProgramRules } from "@/components/Governance";
 import { Pln } from "@/lib/pln";
 
@@ -69,9 +71,30 @@ function Bars({ title, bars, empty }: { title: string; bars: Bar[]; empty: strin
 
 const count = (rows: Row[], ...states: State[]) => rows.filter((d) => states.includes(d.state as State)).length;
 
+type PoolStats = { members: number; staked: bigint; arbiters: ArbiterAccount[] };
+
+/** Pula arbitrów z łańcucha: liczba osób, kaucje w sejfie puli i rzetelność (konta arbitrów). */
+function usePoolStats(): PoolStats | undefined {
+  const w = useWallet();
+  const [stats, setStats] = useState<PoolStats>();
+  useEffect(() => {
+    if (!w.program || !w.deployment) return;
+    const program = w.program;
+    const d = w.deployment;
+    (async () => {
+      const members = await fetchPool(program);
+      const arbiters = (await fetchArbiters(program, members)).filter((a): a is ArbiterAccount => !!a);
+      const vault = await w.connection.getTokenAccountBalance(pdas(d.programId).poolVault()).catch(() => null);
+      setStats({ members: members.length, staked: vault ? BigInt(vault.value.amount) : 0n, arbiters });
+    })().catch(() => setStats(undefined));
+  }, [w.program, w.deployment, w.connection, w.refreshKey]);
+  return stats;
+}
+
 export default function StatsPage() {
   const w = useWallet();
   const deals = useAllDeals();
+  const pool = usePoolStats();
 
   if (!w.deployment) return null;
 
@@ -87,7 +110,11 @@ export default function StatsPage() {
   const volume = closed.reduce((s, d) => s + d.amount, 0n);
   const disputed = funded.filter((d) => d.bond > 0n).length;
   const disputeRate = funded.length ? Math.round((disputed / funded.length) * 100) : 0;
-  const noArbiters = closed.filter((d) => d.votesBuyer + d.votesSeller === 0).length;
+  // Bez arbitrów = nikogo nie trzeba było losować (kod, termin albo ugoda rozstrzygnęły same).
+  const noArbiters = closed.filter((d) => !d.panelDrawn).length;
+  const byVote = closed.filter((d) => d.panelDrawn && Math.max(d.votesBuyer, d.votesSeller) >= (w.deployment?.arbiterQuorum ?? 2)).length;
+  const archived = deals.filter((d) => d.archived).length;
+  const absences = pool?.arbiters.reduce((s, a) => s + a.missed, 0) ?? 0;
 
   const outcomes: Bar[] = [
     { label: "Wypłata dla sprzedawcy", value: count(deals, State.Released) },
@@ -136,7 +163,38 @@ export default function StatsPage() {
           <b>
             {noArbiters}/{closed.length}
           </b>
-          <span className="muted small">kod lub ugoda rozstrzygnęły same</span>
+          <span className="muted small">kod, termin lub ugoda rozstrzygnęły same</span>
+        </div>
+      </section>
+
+      <section className="card wide">
+        <h2>Arbitrzy i porządki</h2>
+        <div className="tiles">
+          <div className="tile">
+            <span className="tile-label">Otwarta pula arbitrów</span>
+            <b>{pool ? plural(pool.members, "osoba", "osoby", "osób") : "…"}</b>
+            <span className="muted small">
+              {pool ? <>kaucje w sejfie puli: {fmtUsdc(pool.staked)}</> : "wczytuję…"} ·{" "}
+              <Link href="/arbitrzy" className="plink">
+                pula →
+              </Link>
+            </span>
+          </div>
+          <div className="tile">
+            <span className="tile-label">Spory rozstrzygnięte głosami</span>
+            <b>{byVote}</b>
+            <span className="muted small">skład losowany z puli, głosy niejawne</span>
+          </div>
+          <div className="tile">
+            <span className="tile-label">Ukarane nieobecności</span>
+            <b>{pool ? absences : "…"}</b>
+            <span className="muted small">arbiter bez głosu traci {fmtUsdc(BigInt(w.deployment.missSlash ?? 0))} kaucji (spalane)</span>
+          </div>
+          <div className="tile">
+            <span className="tile-label">Zamknięte konta</span>
+            <b>{archived}</b>
+            <span className="muted small">rent wrócił do sprzedawców; opis zostaje w historii łańcucha</span>
+          </div>
         </div>
       </section>
 

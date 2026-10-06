@@ -144,7 +144,7 @@ export default function ArbitersPage() {
         ) : rows.length === 0 ? (
           <p className="muted">Pula jest pusta — spory nie mogą trafić do arbitrażu, dopóki nie dołączą co najmniej 3 osoby (+ ewentualnie strony).</p>
         ) : (
-          <table className="gov">
+          <table className="gov pool-table">
             <thead>
               <tr>
                 <th>Arbiter</th>
@@ -162,12 +162,14 @@ export default function ArbitersPage() {
                     </Link>
                     {sameAddr(owner, w.address) && <span className="you"> to Ty</span>}
                   </td>
-                  <td className="mono">{a ? fmtUsdc(a.stake) : "—"}</td>
-                  <td>
+                  <td className="mono" data-label="Kaucja">
+                    {a ? fmtUsdc(a.stake) : "—"}
+                  </td>
+                  <td data-label="Sprawy">
                     {a?.cases ?? 0}
                     {a && a.activeCases > 0 && <small className="muted"> ({a.activeCases} w toku)</small>}
                   </td>
-                  <td className="mono">
+                  <td className="mono" data-label="Rzetelność (✓ · ✗ · ∅)">
                     {a?.withMajority ?? 0} · {a?.againstMajority ?? 0} · {a?.missed ?? 0}
                   </td>
                 </tr>

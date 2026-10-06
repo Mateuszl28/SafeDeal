@@ -554,3 +554,10 @@ ul.plain { margin: 0; padding-left: 1.1rem; display: grid; gap: 6px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips .on { border-color: var(--accent); }
 .attempt-result small { display: block; margin-top: 4px; color: var(--muted); }
+/* Tabela puli na telefonie: wiersze w kolumnie, więc każda komórka dostaje własną etykietę. */
+@media (max-width: 760px) {
+  .pool-table thead { display: none; }
+  .pool-table tr { display: block; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .pool-table td { border-bottom: 0; }
+  .pool-table td[data-label]::before { content: attr(data-label) ": "; color: var(--muted); font-family: var(--font-sans-stack); font-size: 0.8rem; }
+}
