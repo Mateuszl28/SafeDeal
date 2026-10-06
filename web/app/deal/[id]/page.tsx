@@ -61,7 +61,8 @@ export default function DealPage() {
     !!deal &&
     ((deal.state >= State.Funded && deal.state <= State.InArbitration && deal.deadline > 0n && w.now > deal.deadline + 5n) ||
       (deal.state === State.Shipped && /^(DEMO-|\d{20,26}$)/.test(deal.tracking.trim())) ||
-      (deal.state === State.InArbitration && !deal.panelDrawn));
+      (deal.state === State.InArbitration && !deal.panelDrawn) ||
+      (isFinal(deal.state) && !deal.archived && deal.panelDrawn && deal.panelSettled !== 0b111));
   useEffect(() => {
     if (!waitsForRelay) return;
     fetch(`/api/relayer?deal=${idParam}`)

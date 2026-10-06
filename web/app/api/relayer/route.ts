@@ -38,7 +38,7 @@ export async function GET(req: Request) {
   try {
     if (idParam === null) return Response.json({ done: await relayAll(program, d, sponsorKey(), now) });
     const deal = await fetchDeal(program, d, BigInt(idParam));
-    if (!deal || deal.archived || !needsRelay(deal, now)) return Response.json({ done: [], state: deal ? State[deal.state] : null });
+    if (!deal || deal.archived || !needsRelay(deal, now, d)) return Response.json({ done: [], state: deal ? State[deal.state] : null });
     return Response.json({ done: await relayDeal(program, d, deal, sponsorKey(), now) });
   } catch (e) {
     return Response.json({ message: e instanceof Error ? e.message.slice(0, 300) : String(e) }, { status: 500 });

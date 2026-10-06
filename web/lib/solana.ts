@@ -304,7 +304,7 @@ export type WriteName =
   | "createDeal" | "cancel" | "fund" | "markShipped" | "confirmDelivery" | "confirmReceipt" | "confirmPickup"
   | "openDispute" | "respondToDispute" | "refundBuyer" | "commitVote" | "revealVote" | "settleExpired"
   | "submitEvidence" | "proposeSettlement" | "acceptSettlement" | "review" | "faucet"
-  | "drawPanel" | "closeDeal" | "joinPool" | "leavePool";
+  | "drawPanel" | "settleArbiters" | "closeDeal" | "joinPool" | "leavePool";
 
 const bytes32 = (h: string) => Array.from(Buffer.from(h.replace(/^0x/, "").padStart(64, "0"), "hex"));
 const bn = (v: bigint | number) => new BN(v.toString());
@@ -450,8 +450,9 @@ export async function buildInstructions(
           .instruction(),
       ];
     }
+    case "settleArbiters":
     case "closeDeal": {
-      // Najpierw rozliczenie arbitrów ze składu (nagrody / kary), potem zamknięcie kont — jedna transakcja.
+      // Rozliczenie arbitrów ze składu (nagrody / kary), a przy closeDeal potem zamknięcie kont — jedna transakcja.
       const ixs: TransactionInstruction[] = [];
       if (deal.panelDrawn) {
         for (let i = 0; i < deal.panel.length; i++) {
@@ -475,6 +476,7 @@ export async function buildInstructions(
           );
         }
       }
+      if (name === "settleArbiters") return ixs;
       ixs.push(
         ensureAta(deal.seller),
         await m

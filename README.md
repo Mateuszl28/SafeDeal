@@ -176,7 +176,9 @@ oracle/                          szkic źródła Chainlink Functions (InPost) z 
   adresu), a jej przycisk kupuje tą samą ścieżką.
 - **Relayer bez własnego serwera** — `GET /api/relayer?deal=<id>` (`web/lib/relayer.ts`) robi to samo co skrypt
   relayera: potwierdza doręczenia (InPost „delivered” / `DEMO-…` po 15 s), losuje skład arbitrów i po terminie
-  wywołuje `settle_expired` — transakcja rozlicza się według reguł, nawet gdy wszyscy zniknęli. Woła go strona
+  wywołuje `settle_expired` — transakcja rozlicza się według reguł, nawet gdy wszyscy zniknęli. Po werdykcie od razu
+  rozlicza arbitrów (`settle_arbiter`: nagrody i kary bez czekania), a gdy wolno — zamyka konta (`close_deal`, rent
+  wraca do sprzedawcy). Przy dużej liczbie transakcji przegląd ma budżet czasu, resztę robi następne wywołanie. Woła go strona
   transakcji, gdy ktoś ją ogląda, a co 5 minut zapasowo GitHub Actions (`.github/workflows/relayer.yml`, przegląd
   wszystkich transakcji). Endpoint jest publiczny i bez sekretów, bo nie daje żadnej władzy: losować może każdy,
   a potwierdzenia wynikają z obiektywnego warunku; limity częstotliwości chronią RPC.

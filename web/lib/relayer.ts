@@ -4,11 +4,13 @@
 //            numer DEMO-… → potwierdzenie 15 s po nadaniu (symulacja na prezentację),
 //  • arbitraż: losowanie składu (draw_panel), gdy tylko minie slot losowania — może to zrobić każdy,
 //    a robimy to szybko, żeby żadna strona nie przeczekała niewygodnego wyniku,
-//  • po terminie: settle_expired — wynik zapisany w programie wykonuje się, nawet gdy wszyscy zniknęli.
+//  • po terminie: settle_expired — wynik zapisany w programie wykonuje się, nawet gdy wszyscy zniknęli,
+//  • po werdykcie: settle_arbiter — nagrody i kary arbitrów bez czekania, aż ktoś zamknie konta,
+//  • gdy wolno: close_deal — rent wraca do sprzedawcy (adres przypięty w programie).
 // Relayer nie ma żadnych uprawnień ponad te, które program daje każdemu kluczowi oracle / każdemu wywołującemu.
 import { Keypair, Transaction, type Connection } from "@solana/web3.js";
 import type { Program } from "@coral-xyz/anchor";
-import { State, type Deal, type Deployment } from "./contracts";
+import { State, isFinal, type Deal, type Deployment } from "./contracts";
 import { buildInstructions, fetchAllDeals, fetchDeal } from "./solana";
 
 export const DEMO_DELAY = 15;
@@ -51,17 +53,35 @@ async function sendAs(connection: Connection, ixs: Transaction["instructions"], 
   tx.feePayer = payer.publicKey;
   tx.sign(payer);
   const sig = await connection.sendRawTransaction(tx.serialize());
-  const res = await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
-  if (res.value.err) throw new Error(`odrzucona: ${JSON.stringify(res.value.err)}`);
+  try {
+    const res = await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+    if (res.value.err) throw new Error(`odrzucona: ${JSON.stringify(res.value.err)}`);
+  } catch (e) {
+    // Przy przeciążonym RPC potwierdzenie potrafi „wygasnąć”, choć transakcja weszła — sprawdzamy jej status.
+    const st = (await connection.getSignatureStatus(sig, { searchTransactionHistory: true })).value;
+    if (!st || st.err) throw e;
+  }
   return sig;
 }
 
 const expired = (deal: Deal, now: number) =>
   deal.state >= State.Funded && deal.state <= State.InArbitration && deal.deadline > 0n && now > Number(deal.deadline) + CLOCK_MARGIN;
 
+const arbitersPending = (deal: Deal) => isFinal(deal.state) && deal.panelDrawn && deal.panelSettled !== 0b111;
+
+/** Konta wolno zamknąć: anulowana od razu, inaczej po obu opiniach albo po oknie na opinie. */
+const closable = (deal: Deal, d: Deployment, now: number) =>
+  isFinal(deal.state) &&
+  !deal.archived &&
+  (deal.state === State.Cancelled ||
+    (deal.reviewedByBuyer && deal.reviewedBySeller) ||
+    now > Number(deal.closedAt) + d.windows.archive + CLOCK_MARGIN);
+
 /** Czy transakcja czeka na relayer (żeby nie odpytywać łańcucha bez potrzeby). */
-export const needsRelay = (deal: Deal, now: number) =>
+export const needsRelay = (deal: Deal, now: number, d?: Deployment) =>
   expired(deal, now) ||
+  arbitersPending(deal) ||
+  (!!d && closable(deal, d, now)) ||
   (deal.state === State.Shipped && /^(DEMO-|\d{20,26}$)/.test(deal.tracking.trim())) ||
   (deal.state === State.InArbitration && !deal.panelDrawn);
 
@@ -72,6 +92,15 @@ export const needsRelay = (deal: Deal, now: number) =>
 export async function relayDeal(program: Program, d: Deployment, deal: Deal, payer: Keypair | null, now: number): Promise<string[]> {
   const connection = program.provider.connection;
   const done: string[] = [];
+
+  if (isFinal(deal.state) && !deal.archived && payer) {
+    const close = closable(deal, d, now);
+    if (!close && !arbitersPending(deal)) return done;
+    const ixs = await buildInstructions(program, d, payer.publicKey, close ? "closeDeal" : "settleArbiters", [], deal);
+    await sendAs(connection, ixs, payer);
+    done.push(`#${deal.id}: ${close ? "zamknięcie kont (rent do sprzedawcy)" : "rozliczenie arbitrów"}`);
+    return done;
+  }
 
   if (expired(deal, now)) {
     if (!payer) return done;
@@ -118,9 +147,17 @@ export async function relayDeal(program: Program, d: Deployment, deal: Deal, pay
 }
 
 /** Przegląd wszystkich transakcji (zadanie okresowe). */
+/** Budżet czasu jednego przeglądu — funkcja na hostingu ma limit; resztę zrobi następne wywołanie. */
+const SCAN_BUDGET_MS = 40_000;
+
 export async function relayAll(program: Program, d: Deployment, payer: Keypair | null, now: number): Promise<string[]> {
   const out: string[] = [];
-  for (const deal of (await fetchAllDeals(program)).filter((x) => needsRelay(x, now))) {
+  const start = Date.now();
+  for (const deal of (await fetchAllDeals(program)).filter((x) => needsRelay(x, now, d))) {
+    if (Date.now() - start > SCAN_BUDGET_MS) {
+      out.push("budżet czasu wyczerpany — reszta przy następnym wywołaniu");
+      break;
+    }
     try {
       out.push(...(await relayDeal(program, d, deal, payer, now)));
     } catch (e) {
