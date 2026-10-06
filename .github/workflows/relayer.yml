@@ -1,0 +1,18 @@
+# Zapasowe „pchnięcie” relayera, gdy nikt nie ogląda transakcji: potwierdzenia doręczeń (InPost / DEMO-…)
+# i losowanie składu arbitrów. Endpoint jest publiczny i ma własne limity — nie potrzebuje sekretów.
+name: relayer
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Wywołaj /api/relayer
+        run: curl -fsS --max-time 90 "${RELAYER_URL:-https://safe-deal-one.vercel.app/api/relayer}"
+        env:
+          RELAYER_URL: ${{ vars.RELAYER_URL }}

@@ -173,6 +173,11 @@ oracle/                          szkic źródła Chainlink Functions (InPost) z 
   „Kup i zablokuj 250 USDC” z gwarancjami, a zakup to jeden podpis — bez wchodzenia na stronę. Na stronie oferty
   „Podgląd karty” renderuje ją z tego samego endpointu tak, jak zrobi to klient Blinks (działa też bez publicznego
   adresu), a jej przycisk kupuje tą samą ścieżką.
+- **Relayer bez własnego serwera** — `GET /api/relayer?deal=<id>` (`web/lib/relayer.ts`) robi to samo co skrypt
+  relayera: potwierdza doręczenia (InPost „delivered” / `DEMO-…` po 15 s) i losuje skład arbitrów. Woła go strona
+  transakcji, gdy ktoś ją ogląda, a co 5 minut zapasowo GitHub Actions (`.github/workflows/relayer.yml`, przegląd
+  wszystkich transakcji). Endpoint jest publiczny i bez sekretów, bo nie daje żadnej władzy: losować może każdy,
+  a potwierdzenia wynikają z obiektywnego warunku; limity częstotliwości chronią RPC.
 - **Zakup bez SOL.** Transakcję kupna składa serwer, a sponsor opłat podpisuje ją jako płacący opłatę (i dopłaca rent
   za konto profilu). Kupujący tylko podpisuje; brakujące testowe USDC dokłada kran programu w tej samej transakcji.
   Sprawdzone na devnecie: świeży portfel z 0 SOL i 0 USDC kupił ofertę jednym podpisem. Ten sam mechanizm obsługuje
@@ -204,6 +209,7 @@ solana program deploy target/deploy/safedeal.so --program-id target/deploy/safed
 npm run setup:devnet && npm run seed:devnet
 npm run oracle:devnet                     # relayer: numery InPost potwierdza po statusie „delivered” z API InPost,
                                           # przesyłki DEMO-… po 15 s; od razu losuje też skład arbitrów w nowych sporach
+                                          # (opcjonalnie — na hostingu to samo robi /api/relayer, patrz „Funkcje”)
 
 # 3. frontend
 cd ../web && npm install && npm run dev   # http://localhost:3000  (NEXT_PUBLIC_CLUSTER=localnet dla lokalnego)

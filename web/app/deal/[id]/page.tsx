@@ -55,6 +55,23 @@ export default function DealPage() {
     };
   }, [w.deployment, w.program, w.refreshKey, id]);
 
+  // Relayer na serwerze (oracle doręczeń, losowanie składu arbitrów) — pchamy go, gdy ktoś ogląda transakcję,
+  // która na niego czeka. Wszystko, co robi, mógłby zrobić każdy; serwer ma limity częstotliwości.
+  const waitsForRelay =
+    !!deal &&
+    ((deal.state === State.Shipped && /^(DEMO-|\d{20,26}$)/.test(deal.tracking.trim())) ||
+      (deal.state === State.InArbitration && !deal.panelDrawn));
+  useEffect(() => {
+    if (!waitsForRelay) return;
+    fetch(`/api/relayer?deal=${idParam}`)
+      .then((r) => r.json())
+      .then((j: { done?: string[] }) => {
+        if (j.done?.length) w.refresh();
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitsForRelay, w.refreshKey, idParam]);
+
   // Sejf transakcji — konto tokenowe należące do programu, nie do żadnej osoby.
   const vault = w.deployment && deal && !deal.archived ? pdas(w.deployment.programId).vault(new PublicKey(deal.pda)).toBase58() : undefined;
   useEffect(() => {
