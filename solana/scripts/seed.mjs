@@ -35,30 +35,30 @@ async function main() {
   };
 
   // 1. Zakończona sukcesem, z opiniami
-  const a = await create("Rower gravel Kross Esker", 250, "Rama 54 cm, przebieg ok. 800 km, napęd GRX. Drobna rysa na widelcu.");
+  const a = await create("Kross Esker gravel bike", 250, "54 cm frame, about 800 km ridden, GRX groupset. Small scratch on the fork.");
   await step("#1 zakup, doręczenie, odbiór, opinie", async () => {
     await shipAndDeliver(a, "DEMO-520001");
     await c.confirmReceipt(bartek, a);
-    await c.review(bartek, a, 5, "Rower dokładnie jak w opisie, szybka wysyłka.");
-    await c.review(alicja, a, 5, "Bezproblemowy kupujący.");
+    await c.review(bartek, a, 5, "Bike exactly as described, fast shipping.");
+    await c.review(alicja, a, 5, "Hassle-free buyer.");
   });
 
   // 2. Doręczona — trwa okno reklamacji
-  const b = await create("iPhone 13, 128 GB", 320, "Bateria 87%, bez blokad, w zestawie etui. Ekran bez rys.");
+  const b = await create("iPhone 13, 128 GB", 320, "Battery 87%, unlocked, case included. No scratches on the screen.");
   await step("#2 doręczona", () => shipAndDeliver(b, "DEMO-520002"));
 
   // 3. Reklamacja czeka na sprzedawczynię
-  const e = await create("Konsola PS5 + 2 pady", 400, "Wersja z napędem, dwa pady DualSense, kabel HDMI i zasilający.");
+  const e = await create("PS5 console + 2 controllers", 400, "Disc edition, two DualSense controllers, HDMI and power cables.");
   await step("#3 reklamacja", async () => {
     await shipAndDeliver(e, "DEMO-520003");
-    await c.openDispute(bartek, e, "Jeden pad nie działa, brak kabla HDMI");
+    await c.openDispute(bartek, e, "One controller doesn't work, HDMI cable missing");
   });
 
   // 4. Arbitraż — skład wylosowany z puli, jeden arbiter już złożył niejawny głos
-  const f = await create("Hulajnoga elektryczna Xiaomi 4", 290, "Zasięg do 35 km według producenta, przebieg 300 km.");
+  const f = await create("Xiaomi 4 electric scooter", 290, "Up to 35 km range per the manufacturer, 300 km ridden.");
   await step("#4 arbitraż", async () => {
     await shipAndDeliver(f, "DEMO-520004");
-    await c.openDispute(bartek, f, "Bateria trzyma 5 km zamiast 35 km z opisu");
+    await c.openDispute(bartek, f, "Battery lasts 5 km instead of the 35 km in the listing");
     await c.respondToDispute(alicja, f);
     const [first] = await c.drawPanel(P.Celina, f);
     const arb = Object.values(P).find((k) => k.publicKey.equals(first));
@@ -67,7 +67,7 @@ async function main() {
   });
 
   // 5. Propozycja ugody
-  const g = await create('Rower dziecięcy Kellys 20"', 150, "Dla dziecka 6–9 lat. Używany jeden sezon.");
+  const g = await create('Kellys 20" kids bike', 150, "For kids aged 6–9. Used for one season.");
   await step("#5 propozycja ugody", async () => {
     await shipAndDeliver(g, "DEMO-520005");
     await c.proposeSettlement(bartek, g, usdc(45));
@@ -76,30 +76,30 @@ async function main() {
   // Zlecenie w etapach: Alicja (wykonawczyni) robi stronę dla Bartka. Każdy etap = osobna transakcja escrow.
   // Unikalny znacznik przy każdym seedzie — inaczej etapy z kolejnych uruchomień trafiłyby do jednego zlecenia.
   const project = `piekarnia${Date.now().toString(36).slice(-6)}`;
-  const stages = [["Projekt graficzny", 300], ["Wdrożenie", 500], ["Poprawki", 200]];
+  const stages = [["Visual design", 300], ["Implementation", 500], ["Revisions", 200]];
   const ids = [];
   for (const [i, [name, price]] of stages.entries()) {
     ids.push(
-      await create(`Strona dla piekarni — etap ${i + 1}/3: ${name}`, price, `[etap:${project}:${i + 1}/3] ${name}`, {
+      await create(`Bakery website — milestone ${i + 1}/3: ${name}`, price, `[etap:${project}:${i + 1}/3] ${name}`, {
         buyer: bartek.publicKey,
       }),
     );
   }
   await step("zlecenie: etap 1 zaakceptowany, etap 2 oddany", async () => {
     await c.fund(bartek, ids[0]);
-    await c.markShipped(alicja, ids[0], "https://example.com/piekarnia/projekt-graficzny");
+    await c.markShipped(alicja, ids[0], "https://example.com/bakery/visual-design");
     await c.confirmReceipt(bartek, ids[0]);
     await c.fund(bartek, ids[1]);
-    await c.markShipped(alicja, ids[1], "https://example.com/piekarnia/podglad");
+    await c.markShipped(alicja, ids[1], "https://example.com/bakery/preview");
   });
 
   // Otwarte oferty
-  await create("Gitara akustyczna Yamaha F310", 95, "Nowe struny, bez pęknięć. Pokrowiec gratis.");
-  await create("Rower miejski Romet — odbiór w Krakowie", 130, "Koszyk, błotniki, nowe opony. Odbiór osobisty, Kraków Kazimierz.", {
+  await create("Yamaha F310 acoustic guitar", 95, "New strings, no cracks. Gig bag included.");
+  await create("Romet city bike — pickup in Kraków", 130, "Basket, mudguards, new tyres. Pickup in person, Kraków Kazimierz.", {
     pickupAllowed: true,
   });
-  await create("Kurtka The North Face, rozmiar M", 70, "Zimowa, puchowa, noszona dwa sezony.");
-  await create("Aparat Sony A6000 z obiektywem", 180, "Obiektyw 16-50 mm, przebieg migawki ok. 12 tys., dwie baterie.");
+  await create("The North Face jacket, size M", 70, "Winter down jacket, worn for two seasons.");
+  await create("Sony A6000 camera with lens", 180, "16-50 mm lens, about 12k shutter count, two batteries.");
 
   console.log(`Gotowe: #${a} zakończona, #${b} doręczona, #${e} reklamacja, #${f} arbitraż, #${g} ugoda, zlecenie /projekt/${project}, łącznie ${await c.dealCount()}.`);
   console.log("Uwaga: okna czasowe na devnecie to minuty — stany #2–#5 po kilku minutach można rozliczyć „Rozlicz teraz”.");

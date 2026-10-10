@@ -47,16 +47,16 @@ const DEMO_STAKE = usdc(200); // persony-arbitrzy wpłacają więcej — jedna n
 const ARBITERS = ["Arbiter 1", "Arbiter 2", "Arbiter 3", "Arbiter 4", "Arbiter 5"];
 
 const PERSONAS = [
-  ["Alicja", "sprzedawczyni"],
-  ["Bartek", "kupujący"],
-  ["Celina", "obca osoba"],
+  ["Alicja", "seller"],
+  ["Bartek", "buyer"],
+  ["Celina", "stranger"],
   ["Arbiter 1", "arbiter"],
   ["Arbiter 2", "arbiter"],
   ["Arbiter 3", "arbiter"],
   ["Arbiter 4", "arbiter"],
   ["Arbiter 5", "arbiter"],
 ];
-const ORACLES = ["API InPost", "Skan w paczkomacie", "Niezależny węzeł"];
+const ORACLES = ["InPost API", "Parcel locker scan", "Independent node"];
 
 /** Klucze person trafiają do web/.env.local (poza gitem) jako NEXT_PUBLIC_DEMO_KEYS — po zmianie zrestartuj `npm run dev`. */
 function writeEnvKeys(j) {

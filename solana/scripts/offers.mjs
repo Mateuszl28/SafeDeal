@@ -9,11 +9,11 @@ const c = client(new PublicKey(d.mint));
 const { personas: P } = demoKeys();
 
 const OFFERS = [
-  ["Rower gravel Kross Esker 2.0", 250, "Rama 54 cm, przebieg ok. 800 km, napęd GRX. Drobna rysa na widelcu."],
-  ["iPhone 13, 128 GB", 320, "Bateria 87%, bez blokad, w zestawie etui. Ekran bez rys."],
-  ["Konsola PS5 + 2 pady", 400, "Wersja z napędem, dwa pady DualSense, kabel HDMI i zasilający."],
-  ["Aparat Sony A6000 z obiektywem", 180, "Obiektyw 16-50 mm, przebieg migawki ok. 12 tys., dwie baterie."],
-  ["Rower miejski Romet — odbiór w Warszawie", 130, "Koszyk, błotniki, nowe opony. Odbiór osobisty, Warszawa Mokotów.", true],
+  ["Kross Esker 2.0 gravel bike", 250, "54 cm frame, about 800 km ridden, GRX groupset. Small scratch on the fork."],
+  ["iPhone 13, 128 GB", 320, "Battery 87%, unlocked, case included. No scratches on the screen."],
+  ["PS5 console + 2 controllers", 400, "Disc edition, two DualSense controllers, HDMI and power cables."],
+  ["Sony A6000 camera with lens", 180, "16-50 mm lens, about 12k shutter count, two batteries."],
+  ["Romet city bike — pickup in Warsaw", 130, "Basket, mudguards, new tyres. Pickup in person, Warsaw Mokotów.", true],
 ];
 
 for (const [title, price, description, pickupAllowed = false] of OFFERS) {

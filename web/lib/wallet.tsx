@@ -31,15 +31,27 @@ const keys = loadKeys();
 
 export type Persona = { name: string; role: string; keypair: Keypair; address: Address };
 
+// Klucze w środowisku Vercela zapisano po polsku — nazwy ról i źródeł pokazujemy po angielsku.
+const EN_NAMES: Record<string, string> = {
+  sprzedawczyni: "seller",
+  sprzedawca: "seller",
+  kupujący: "buyer",
+  "obca osoba": "stranger",
+  "API InPost": "InPost API",
+  "Skan w paczkomacie": "Parcel locker scan",
+  "Niezależny węzeł": "Independent node",
+};
+const en = (s: string) => EN_NAMES[s] ?? s;
+
 export const PERSONAS: Persona[] = (keys.personas ?? []).map((p) => {
   const keypair = Keypair.fromSecretKey(Uint8Array.from(p.secret));
-  return { name: p.name, role: p.role, keypair, address: keypair.publicKey.toBase58() };
+  return { name: p.name, role: en(p.role), keypair, address: keypair.publicKey.toBase58() };
 });
 
 /** Niezależne źródła statusu przesyłki w demo (w produkcji: API przewoźnika, Chainlink/Switchboard). */
 export const DEMO_ORACLES = (keys.oracles ?? []).map((o) => {
   const keypair = Keypair.fromSecretKey(Uint8Array.from(o.secret));
-  return { name: o.name, keypair, address: keypair.publicKey.toBase58() };
+  return { name: en(o.name), keypair, address: keypair.publicKey.toBase58() };
 });
 
 type Mode = "demo" | "wallet";
