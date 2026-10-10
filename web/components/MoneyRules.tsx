@@ -17,8 +17,8 @@ export function MoneyRules({ deal, vaultBalance }: { deal: Deal; vaultBalance?: 
   const s = deal.state as State;
   if (s === State.Created || s === State.Cancelled || s === State.None) return null;
 
-  const seller = nameOf(deal.seller) ?? "sprzedawca";
-  const buyer = nameOf(deal.buyer) ?? "kupujący";
+  const seller = nameOf(deal.seller) ?? "the seller";
+  const buyer = nameOf(deal.buyer) ?? "the buyer";
   const pickup = !isZeroHash(deal.pickupHash);
   const q = w.deployment?.oracleQuorum ?? 2;
   const n = w.deployment?.oracles.length ?? 3;
@@ -30,69 +30,69 @@ export function MoneyRules({ deal, vaultBalance }: { deal: Deal; vaultBalance?: 
   const split: Path[] = [];
 
   if (s === State.Funded && pickup) {
-    toSeller.push({ text: `${buyer} pokaże na spotkaniu tajny kod, a program sprawdzi go z hashem zapisanym przy wpłacie`, fn: "confirm_pickup" });
-    toBuyer.push({ text: "do spotkania nie dojdzie przed terminem — rozliczyć może wtedy każdy", fn: "settle_expired", anyone: true, when: deal.deadline });
-    toBuyer.push({ text: `${seller} dobrowolnie zwróci pieniądze`, fn: "refund_buyer" });
+    toSeller.push({ text: `${buyer} shows the secret code at the meetup, and the program checks it against the hash stored at payment`, fn: "confirm_pickup" });
+    toBuyer.push({ text: "the meetup doesn't happen before the deadline — then anyone can settle", fn: "settle_expired", anyone: true, when: deal.deadline });
+    toBuyer.push({ text: `${seller} voluntarily refunds the money`, fn: "refund_buyer" });
   } else if (s === State.Funded) {
-    toSeller.push({ text: `${seller} nada paczkę, a potem ${q} z ${n} niezależnych źródeł potwierdzi doręczenie albo ${buyer} ją przyjmie`, fn: "mark_shipped → …" });
-    toBuyer.push({ text: `${seller} nie nada paczki przed terminem — rozliczyć może wtedy każdy`, fn: "settle_expired", anyone: true, when: deal.deadline });
-    toBuyer.push({ text: `${seller} dobrowolnie zwróci pieniądze`, fn: "refund_buyer" });
+    toSeller.push({ text: `${seller} ships the parcel, and then ${q} of ${n} independent sources confirm delivery or ${buyer} accepts it`, fn: "mark_shipped → …" });
+    toBuyer.push({ text: `${seller} doesn't ship the parcel before the deadline — then anyone can settle`, fn: "settle_expired", anyone: true, when: deal.deadline });
+    toBuyer.push({ text: `${seller} voluntarily refunds the money`, fn: "refund_buyer" });
   } else if (s === State.Shipped || s === State.Delivered) {
-    toSeller.push({ text: `${buyer} potwierdzi, że wszystko jest OK`, fn: "confirm_receipt" });
+    toSeller.push({ text: `${buyer} confirms everything is OK`, fn: "confirm_receipt" });
     toSeller.push({
-      text: s === State.Delivered ? "minie okno reklamacji bez reklamacji — rozliczyć może wtedy każdy" : "minie czas na doręczenie i reklamację — rozliczyć może wtedy każdy",
+      text: s === State.Delivered ? "the claim window passes with no claim — then anyone can settle" : "the time for delivery and claims runs out — then anyone can settle",
       fn: "settle_expired",
       anyone: true,
       when: deal.deadline,
     });
-    toBuyer.push({ text: `${buyer} zgłosi reklamację (z kaucją) przed terminem, a ${seller} jej nie odeprze`, fn: "open_dispute" });
-    toBuyer.push({ text: `${seller} dobrowolnie zwróci pieniądze`, fn: "refund_buyer" });
-    split.push({ text: "obie strony zgodzą się na tę samą kwotę ugody", fn: "propose / accept_settlement" });
+    toBuyer.push({ text: `${buyer} files a claim (with a bond) before the deadline, and ${seller} doesn't contest it`, fn: "open_dispute" });
+    toBuyer.push({ text: `${seller} voluntarily refunds the money`, fn: "refund_buyer" });
+    split.push({ text: "both parties agree on the same settlement amount", fn: "propose / accept_settlement" });
   } else if (s === State.Disputed) {
-    toBuyer.push({ text: `${seller} nie odpowie na reklamację przed terminem — rozliczyć może wtedy każdy`, fn: "settle_expired", anyone: true, when: deal.deadline });
-    toBuyer.push({ text: `${seller} uzna reklamację`, fn: "refund_buyer" });
-    toSeller.push({ text: `tylko przez arbitraż: ${seller} wpłaca kaucję, a ${aq} z ${an} arbitrów wylosowanych z otwartej puli przyzna mu rację`, fn: "respond_to_dispute → reveal_vote" });
-    split.push({ text: "obie strony zgodzą się na tę samą kwotę ugody", fn: "propose / accept_settlement" });
+    toBuyer.push({ text: `${seller} doesn't respond to the claim before the deadline — then anyone can settle`, fn: "settle_expired", anyone: true, when: deal.deadline });
+    toBuyer.push({ text: `${seller} accepts the claim`, fn: "refund_buyer" });
+    toSeller.push({ text: `only through arbitration: ${seller} posts a bond, and ${aq} of ${an} arbiters drawn from the open pool rule in their favour`, fn: "respond_to_dispute → reveal_vote" });
+    split.push({ text: "both parties agree on the same settlement amount", fn: "propose / accept_settlement" });
   } else if (s === State.InArbitration) {
-    toSeller.push({ text: `${aq} z ${an} arbitrów ujawni głos za sprzedawcą`, fn: "reveal_vote" });
-    toBuyer.push({ text: `${aq} z ${an} arbitrów ujawni głos za kupującym`, fn: "reveal_vote" });
-    split.push({ text: "arbitrzy nie rozstrzygną przed terminem — podział 50/50, rozliczyć może każdy", fn: "settle_expired", anyone: true, when: deal.deadline });
-    split.push({ text: "obie strony zgodzą się na tę samą kwotę ugody", fn: "propose / accept_settlement" });
+    toSeller.push({ text: `${aq} of ${an} arbiters reveal a vote for the seller`, fn: "reveal_vote" });
+    toBuyer.push({ text: `${aq} of ${an} arbiters reveal a vote for the buyer`, fn: "reveal_vote" });
+    split.push({ text: "the arbiters don't decide before the deadline — 50/50 split, anyone can settle", fn: "settle_expired", anyone: true, when: deal.deadline });
+    split.push({ text: "both parties agree on the same settlement amount", fn: "propose / accept_settlement" });
   }
 
   const final = isFinal(s);
 
   return (
     <section className="card wide money-rules">
-      <h2>{final ? "Kto ruszył te pieniądze?" : "Kto może teraz ruszyć te pieniądze?"}</h2>
+      <h2>{final ? "Who moved this money?" : "Who can move this money now?"}</h2>
       {final ? (
         <p>
-          Nikt nie musiał niczego „zatwierdzać”. Program wypłacił środki, gdy spełnił się zapisany warunek
+          Nobody had to “approve” anything. The program paid out the funds once the recorded condition was met
           {vaultBalance !== undefined && vaultBalance > 0n
-            ? ` — w sejfie zostały tylko nagrody arbitrów (${fmtUsdc(vaultBalance)}), które program wyśle im przy rozliczeniu arbitrów.`
+            ? ` — only the arbiters' rewards (${fmtUsdc(vaultBalance)}) remain in the vault; the program sends them out when the arbiters are settled.`
             : deal.archived
-              ? " — sejf został już zamknięty."
-              : ` — sejf jest teraz pusty${vaultBalance !== undefined ? ` (${fmtUsdc(vaultBalance)})` : ""}.`}
+              ? " — the vault has already been closed."
+              : ` — the vault is now empty${vaultBalance !== undefined ? ` (${fmtUsdc(vaultBalance)})` : ""}.`}
         </p>
       ) : (
         <>
           <p className="muted small">
-            {vaultBalance !== undefined && <b>{fmtUsdc(vaultBalance)}</b>} leży w sejfie, którego właścicielem jest program —
-            nie człowiek. Wyjdą z niego tylko w jeden z tych sposobów:
+            {vaultBalance !== undefined && <b>{fmtUsdc(vaultBalance)}</b>} sits in a vault owned by the program —
+            not a person. It can only leave in one of these ways:
           </p>
           <div className="paths">
-            <PathList title={`→ do: ${seller}`} paths={toSeller} now={w.now} />
-            <PathList title={`→ do: ${buyer}`} paths={toBuyer} now={w.now} />
-            {split.length > 0 && <PathList title="→ podział" paths={split} now={w.now} />}
+            <PathList title={`→ to: ${seller}`} paths={toSeller} now={w.now} />
+            <PathList title={`→ to: ${buyer}`} paths={toBuyer} now={w.now} />
+            {split.length > 0 && <PathList title="→ split" paths={split} now={w.now} />}
           </div>
         </>
       )}
       <ul className="nobody">
-        <li>✗ {seller} nie wypłaci sobie pieniędzy przed spełnieniem warunku</li>
-        <li>✗ {buyer} nie cofnie wpłaty jak przelewu</li>
-        {deal.bond > 0n && <li>✗ żadna ze stron nie wybiera arbitrów — skład losuje program z otwartej puli</li>}
+        <li>✗ {seller} can't pay themselves before the condition is met</li>
+        <li>✗ {buyer} can't reverse the payment like a bank transfer</li>
+        {deal.bond > 0n && <li>✗ neither party picks the arbiters — the program draws the panel from the open pool</li>}
         <li>
-          ✗ autorzy SafeDeal też nie — program nie ma instrukcji administratora, a reguły zapisano raz przy wdrożeniu{" "}
+          ✗ neither can the SafeDeal team — the program has no admin instruction, and the rules were set once at deployment{" "}
           {w.deployment && (
             <a className="plink" href={explorerAddr(w.deployment.programId, w.deployment.cluster)} target="_blank" rel="noreferrer">
               (program ↗)
@@ -111,12 +111,12 @@ function PathList({ title, paths, now }: { title: string; paths: Path[]; now: bi
       <ul>
         {paths.map((p) => (
           <li key={p.fn + p.text}>
-            <span>gdy {p.text}</span>
+            <span>when {p.text}</span>
             {p.when !== undefined && p.when > 0n && (
-              <small className="muted"> · {p.when > now ? `za ${fmtDuration(p.when - now)}` : "termin minął — można teraz"}</small>
+              <small className="muted"> · {p.when > now ? `in ${fmtDuration(p.when - now)}` : "deadline passed — possible now"}</small>
             )}
             <code className="fn">{p.fn}</code>
-            {p.anyone && <span className="anyone">może każdy</span>}
+            {p.anyone && <span className="anyone">anyone can</span>}
           </li>
         ))}
       </ul>

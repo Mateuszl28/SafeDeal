@@ -28,9 +28,9 @@ export function Pln({ usdc, prefix = "≈ " }: { usdc: bigint; prefix?: string }
   if (!rate) return null;
   const zl = toUsdc(usdc) * rate.mid;
   return (
-    <span className="pln" title={`Kurs średni NBP: 1 USD = ${rate.mid.toFixed(4)} zł (${rate.date}). 1 USDC ≈ 1 USD.`}>
+    <span className="pln" title={`NBP average rate: 1 USD = ${rate.mid.toFixed(4)} PLN (${rate.date}). 1 USDC ≈ 1 USD.`}>
       {prefix}
-      {zl.toLocaleString("pl-PL", { maximumFractionDigits: 0 })} zł
+      {zl.toLocaleString("en-GB", { maximumFractionDigits: 0 })} PLN
     </span>
   );
 }

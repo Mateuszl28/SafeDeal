@@ -51,43 +51,43 @@ export function ProgramRules() {
 
   return (
     <section className="card wide">
-      <h2>Reguły gry</h2>
+      <h2>Rules of the game</h2>
       <table className="gov">
         <tbody>
           <tr>
-            <th>Potwierdzenia doręczenia</th>
+            <th>Delivery confirmations</th>
             <td>
-              {cfg.oracleQuorum} z {cfg.oracles.length} niezależnych źródeł statusu przesyłki musi się zgodzić · {names(cfg.oracles)}
+              {cfg.oracleQuorum} of {cfg.oracles.length} independent parcel-status sources must agree · {names(cfg.oracles)}
             </td>
           </tr>
           <tr>
-            <th>Arbitrzy</th>
+            <th>Arbiters</th>
             <td>
-              otwarta pula ({pool} os.) — dołączyć może każdy z kaucją min. {fmtUsdc(cfg.arbiterStake)} · do każdego sporu program losuje 3
-              osoby spoza stron · werdykt przy {cfg.arbiterQuorum} z 3 głosów · brak głosu: {fmtUsdc(cfg.missSlash)} kaucji spalone ·{" "}
+              open pool ({pool} members) — anyone can join with a bond of at least {fmtUsdc(cfg.arbiterStake)} · for each dispute the program draws 3
+              people other than the parties · verdict at {cfg.arbiterQuorum} of 3 votes · no vote: {fmtUsdc(cfg.missSlash)} of the bond burned ·{" "}
               <Link href="/arbitrzy" className="plink">
-                pula →
+                pool →
               </Link>
             </td>
           </tr>
           <tr>
-            <th>Terminy</th>
+            <th>Deadlines</th>
             <td>
-              nadanie: {fmtDuration(windows.ship)} · dostawa: {fmtDuration(windows.transit)} · sprawdzenie paczki:{" "}
-              {fmtDuration(windows.inspection)} · odpowiedź na reklamację: {fmtDuration(windows.response)} · głosowanie arbitrów:{" "}
-              {fmtDuration(windows.arbitration)} + ujawnienie {fmtDuration(windows.reveal)}
+              shipping: {fmtDuration(windows.ship)} · delivery: {fmtDuration(windows.transit)} · parcel inspection:{" "}
+              {fmtDuration(windows.inspection)} · response to a claim: {fmtDuration(windows.response)} · arbiter voting:{" "}
+              {fmtDuration(windows.arbitration)} + reveal {fmtDuration(windows.reveal)}
             </td>
           </tr>
           <tr>
-            <th>Zamykanie kont</th>
+            <th>Closing accounts</th>
             <td>
-              po rozliczeniu każdy może zamknąć konta transakcji — rent wraca do sprzedawcy; po {fmtDuration(Number(cfg.archiveWindow))} także
-              bez kompletu opinii
+              after settlement anyone can close the deal's accounts — the rent goes back to the seller; after {fmtDuration(Number(cfg.archiveWindow))} even
+              without both reviews
             </td>
           </tr>
           <tr>
-            <th>Kaucja przy sporze</th>
-            <td>{(cfg.bondBps / 100).toLocaleString("pl-PL")}% kwoty — wpłaca każda strona, która idzie w spór; przegrany ją traci</td>
+            <th>Dispute bond</th>
+            <td>{(cfg.bondBps / 100).toLocaleString("en-GB")}% of the amount — paid by each party that enters the dispute; the loser forfeits it</td>
           </tr>
           <tr>
             <th>Program</th>
@@ -100,7 +100,7 @@ export function ProgramRules() {
         </tbody>
       </table>
       <p>
-        <b>Nie ma instrukcji administratora — tych reguł nie może zmienić nikt, także autor.</b>
+        <b>There is no admin instruction — nobody can change these rules, not even the author.</b>
       </p>
     </section>
   );

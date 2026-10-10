@@ -18,7 +18,7 @@ const SCRIPT = String.raw`(function () {
     var theme = el.getAttribute("data-theme");
     var f = document.createElement("iframe");
     f.src = base + "/widget/deal/" + id + (theme === "dark" || theme === "light" ? "?theme=" + theme : "");
-    f.title = "SafeDeal — bezpieczny zakup tej oferty";
+    f.title = "SafeDeal — buy this offer safely";
     f.loading = "lazy";
     f.setAttribute("data-safedeal-id", id);
     f.style.cssText = "border:0;width:100%;max-width:420px;height:280px;display:block;background:transparent";
@@ -38,7 +38,7 @@ const SCRIPT = String.raw`(function () {
     a.href = base + "/?" + q.toString() + "#nowa-oferta";
     a.target = "_blank";
     a.rel = "noopener";
-    if (!a.textContent.trim()) a.textContent = "🔒 Sprzedaj bezpiecznie przez SafeDeal";
+    if (!a.textContent.trim()) a.textContent = "🔒 Sell safely with SafeDeal";
     if (!a.className) a.style.cssText = "display:inline-block;padding:10px 14px;border-radius:10px;background:#111827;color:#fff;font:600 14px system-ui,sans-serif;text-decoration:none";
     if (a !== el) el.appendChild(a);
   }

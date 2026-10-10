@@ -36,8 +36,8 @@ function useReputation(address: Address) {
 
 function trustLabel(rep: Rep): { text: string; tone: "ok" | "new" | "warn" } {
   const done = rep.soldOk + rep.boughtOk;
-  if (rep.lost > 0 && rep.lost >= rep.won) return { text: "Przegrane spory — zachowaj ostrożność", tone: "warn" };
-  if (done === 0) return { text: "Nowy użytkownik — brak historii", tone: "new" };
+  if (rep.lost > 0 && rep.lost >= rep.won) return { text: "Lost disputes — proceed with caution", tone: "warn" };
+  if (done === 0) return { text: "New user — no history", tone: "new" };
   return { text: dealsDone(done), tone: "ok" };
 }
 
@@ -62,36 +62,36 @@ export function ProfileSummary({ address, deals, compact }: { address: Address; 
         <div className="stats">
           <div>
             <b>{rep.soldOk}</b>
-            <span>sprzedaży</span>
+            <span>sales</span>
           </div>
           <div>
             <b>{rep.boughtOk}</b>
-            <span>zakupów</span>
+            <span>purchases</span>
           </div>
           <div>
             <b>
               {rep.won}/{rep.won + rep.lost}
             </b>
-            <span>wygrane spory</span>
+            <span>disputes won</span>
           </div>
           <div>
             <b>{active.length}</b>
-            <span>w toku</span>
+            <span>in progress</span>
           </div>
         </div>
       )}
-      {!compact && volume > 0n && <p className="muted">Łącznie sprzedane z ochroną SafeDeal: {fmtUsdc(volume)}</p>}
+      {!compact && volume > 0n && <p className="muted">Total sold with SafeDeal protection: {fmtUsdc(volume)}</p>}
 
       {arb && (
         <p className="muted small">
-          Jako arbiter{arb.inPool ? ` (w puli, kaucja ${fmtUsdc(arb.stake)})` : ""}: {arb.cases} wylosowanych spraw ·{" "}
-          {arb.withMajority} głosów zgodnych z werdyktem · {arb.againstMajority} przeciw · {arb.missed} nieobecności
+          As arbiter{arb.inPool ? ` (in pool, bond ${fmtUsdc(arb.stake)})` : ""}: {arb.cases} cases drawn ·{" "}
+          {arb.withMajority} votes matching the verdict · {arb.againstMajority} against · {arb.missed} missed
         </p>
       )}
-      <p className="muted small">Dane pochodzą wprost z publicznego rejestru — nie da się ich kupić, usunąć ani podkręcić.</p>
+      <p className="muted small">This data comes straight from the public ledger — it can't be bought, deleted or inflated.</p>
       {compact && (
         <Link href={`/u/${address}`} className="btn ghost sm">
-          Zobacz pełny profil
+          View full profile
         </Link>
       )}
     </section>

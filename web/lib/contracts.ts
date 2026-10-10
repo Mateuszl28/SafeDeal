@@ -59,26 +59,26 @@ export enum State {
 
 export const STATE_LABEL: Record<State, string> = {
   [State.None]: "—",
-  [State.Created]: "Czeka na kupującego",
-  [State.Funded]: "Opłacona — czeka na nadanie",
-  [State.Shipped]: "W drodze",
-  [State.Delivered]: "Doręczona — okno reklamacji",
-  [State.Disputed]: "Reklamacja — czeka na sprzedawcę",
-  [State.InArbitration]: "Arbitraż",
-  [State.Released]: "Zakończona — wypłacono sprzedawcy",
-  [State.Refunded]: "Zakończona — zwrot dla kupującego",
-  [State.Split]: "Zakończona — podział 50/50",
-  [State.Cancelled]: "Anulowana",
-  [State.Settled]: "Zakończona — ugoda stron",
+  [State.Created]: "Waiting for a buyer",
+  [State.Funded]: "Paid — waiting for shipment",
+  [State.Shipped]: "In transit",
+  [State.Delivered]: "Delivered — complaint window",
+  [State.Disputed]: "Complaint — waiting for the seller",
+  [State.InArbitration]: "Arbitration",
+  [State.Released]: "Completed — paid out to the seller",
+  [State.Refunded]: "Completed — refunded to the buyer",
+  [State.Split]: "Completed — 50/50 split",
+  [State.Cancelled]: "Cancelled",
+  [State.Settled]: "Completed — settled by the parties",
 };
 
 /** Co się stanie, jeśli nikt nic nie zrobi do deadline'u. */
 export const TIMEOUT_OUTCOME: Partial<Record<State, string>> = {
-  [State.Funded]: "pieniądze wrócą do kupującego",
-  [State.Shipped]: "pieniądze trafią do sprzedawcy",
-  [State.Delivered]: "pieniądze trafią do sprzedawcy",
-  [State.Disputed]: "kupujący wygra spór",
-  [State.InArbitration]: "kwota zostanie podzielona 50/50",
+  [State.Funded]: "the money goes back to the buyer",
+  [State.Shipped]: "the money goes to the seller",
+  [State.Delivered]: "the money goes to the seller",
+  [State.Disputed]: "the buyer wins the dispute",
+  [State.InArbitration]: "the amount is split 50/50",
 };
 
 export const isFinal = (s: State) => s >= State.Released;

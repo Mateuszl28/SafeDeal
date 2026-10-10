@@ -57,16 +57,16 @@ function PanelDraw({ deal }: { deal: Deal }) {
   return (
     <div className="voting">
       <small className="muted">
-        Skład 3 arbitrów wylosuje program z otwartej puli — źródłem losowości jest hash slotu <span className="mono">{String(deal.drawSlot)}</span>,
-        który powstał dopiero po przyjęciu sporu, więc nikt (także strony) nie mógł go przewidzieć ani wybrać arbitrów. Strony sporu
-        nie mogą trafić do składu. <Link href="/arbitrzy" className="plink">Pula arbitrów →</Link>
+        The program will draw a panel of 3 arbiters from the open pool — the randomness comes from the hash of slot <span className="mono">{String(deal.drawSlot)}</span>,
+        produced only after the dispute was accepted, so nobody (the parties included) could predict it or pick the arbiters. The parties
+        can't be drawn onto the panel. <Link href="/arbitrzy" className="plink">Arbiter pool →</Link>
       </small>
       {w.address ? (
-        <button className="btn" disabled={!!w.busy || !ready} onClick={() => w.write("drawPanel", [], { deal, label: "Wylosowano skład arbitrów" })}>
-          {ready ? "Losuj skład arbitrów" : "Czekamy na slot losowania…"}
+        <button className="btn" disabled={!!w.busy || !ready} onClick={() => w.write("drawPanel", [], { deal, label: "Arbiter panel drawn" })}>
+          {ready ? "Draw the arbiter panel" : "Waiting for the draw slot…"}
         </button>
       ) : (
-        <small className="muted">Losowanie może uruchomić każdy — także relayer, który robi to automatycznie.</small>
+        <small className="muted">Anyone can trigger the draw — including the relayer, which does it automatically.</small>
       )}
     </div>
   );
@@ -89,23 +89,23 @@ export function VotingStatus({ deal }: { id?: bigint; deal: Deal }) {
   return (
     <div className="voting">
       <small className="muted">
-        Sprawę rozstrzyga {v.panelSize} arbitrów wylosowanych z otwartej puli. Decyduje {v.quorum} zgodnych głosów.
+        The case is decided by {v.panelSize} arbiters drawn from the open pool. {v.quorum} matching votes decide.
       </small>
       <div className={`phase ${!v.revealOpen ? "on" : "done"}`}>
-        <b>Faza 1 · niejawne głosy</b>
+        <b>Phase 1 · secret votes</b>
         <span>
-          {v.commits}/{v.panelSize} złożonych
-          {!v.revealOpen && v.commitEnd > w.now && <> · zostało {fmtDuration(v.commitEnd - w.now)}</>}
+          {v.commits}/{v.panelSize} cast
+          {!v.revealOpen && v.commitEnd > w.now && <> · {fmtDuration(v.commitEnd - w.now)} left</>}
         </span>
       </div>
       <div className={`phase ${v.revealOpen ? "on" : ""}`}>
-        <b>Faza 2 · ujawnianie</b>
+        <b>Phase 2 · reveal</b>
         <span>
-          {deal.votesBuyer} za kupującym · {deal.votesSeller} za sprzedawcą (rozstrzyga {v.quorum})
+          {deal.votesBuyer} for the buyer · {deal.votesSeller} for the seller ({v.quorum} decide)
         </span>
       </div>
       <small className="muted">
-        Do końca fazy 1 w blockchainie widać tylko odciski (hashe) głosów — żaden arbiter nie wie, jak głosowali inni.
+        Until phase 1 ends, only vote hashes are visible on the blockchain — no arbiter knows how the others voted.
       </small>
       <ul className="arb-stats">
         {deal.panel.map((a, i) => (
@@ -115,11 +115,11 @@ export function VotingStatus({ deal }: { id?: bigint; deal: Deal }) {
                 {nameOf(a) ?? short(a)}
               </Link>{" "}
               <small className="muted">
-                {deal.votes[i] ? "· głos ujawniony" : !isZeroHash(deal.commits[i]) ? "· głos złożony" : "· jeszcze nie głosował"}
+                {deal.votes[i] ? "· vote revealed" : !isZeroHash(deal.commits[i]) ? "· vote cast" : "· hasn't voted yet"}
               </small>
             </span>
             {stats[i] && (
-              <span className="muted" title="zgodnie z werdyktem · przeciw · nieobecny">
+              <span className="muted" title="with the verdict · against · missed">
                 ✓ {stats[i]!.withMajority} · ✗ {stats[i]!.againstMajority} · ∅ {stats[i]!.missed}
               </span>
             )}
@@ -152,32 +152,32 @@ export function ArbiterVote({ id, deal }: { id: bigint; deal: Deal }) {
     const commitment = await voteCommitment(id, w.address, forBuyer, salt);
     save(key, { forBuyer, salt });
     setSaved({ forBuyer, salt });
-    await w.write("commitVote", [commitment], { deal, label: "Złożono niejawny głos" });
+    await w.write("commitVote", [commitment], { deal, label: "Secret vote cast" });
   }
 
   async function reveal() {
     if (!saved) return;
-    await w.write("revealVote", [saved.forBuyer, saved.salt], { deal, label: "Ujawniono głos" });
+    await w.write("revealVote", [saved.forBuyer, saved.salt], { deal, label: "Vote revealed" });
   }
 
-  const side = (b: boolean) => (b ? "za kupującym" : "za sprzedawcą");
+  const side = (b: boolean) => (b ? "for the buyer" : "for the seller");
 
-  if (revealed) return <p className="muted">Twój głos ({side(revealed === 1)}) jest ujawniony i policzony.</p>;
+  if (revealed) return <p className="muted">Your vote ({side(revealed === 1)}) is revealed and counted.</p>;
 
   if (!committed) {
-    if (v.revealOpen) return <p className="muted">Faza niejawnych głosów minęła — nie oddałeś głosu (część kaucji zostanie spalona).</p>;
+    if (v.revealOpen) return <p className="muted">The secret voting phase is over — you didn't vote (part of your bond will be burned).</p>;
     return (
       <>
         <p className="muted small">
-          Zostałeś wylosowany do tej sprawy. Twój wybór trafi do blockchaina jako odcisk (hash) — inni arbitrzy go nie zobaczą. Brak głosu
-          kosztuje część kaucji.
+          You've been drawn for this case. Your choice goes on-chain as a hash — the other arbiters won't see it. Not voting
+          costs part of your bond.
         </p>
         <div className="inline">
           <button className="btn" disabled={!!w.busy} onClick={() => commit(true)}>
-            Rację ma kupujący
+            The buyer is right
           </button>
           <button className="btn" disabled={!!w.busy} onClick={() => commit(false)}>
-            Rację ma sprzedawca
+            The seller is right
           </button>
         </div>
       </>
@@ -187,16 +187,16 @@ export function ArbiterVote({ id, deal }: { id: bigint; deal: Deal }) {
   if (!v.revealOpen) {
     return (
       <p className="muted">
-        Głos złożony{saved ? ` (${side(saved.forBuyer)})` : ""} — czekamy na pozostałych arbitrów ({v.commits}/{v.panelSize}).
+        Vote cast{saved ? ` (${side(saved.forBuyer)})` : ""} — waiting for the other arbiters ({v.commits}/{v.panelSize}).
       </p>
     );
   }
 
   return saved ? (
     <button className="btn" disabled={!!w.busy} onClick={reveal}>
-      Ujawnij swój głos ({side(saved.forBuyer)})
+      Reveal your vote ({side(saved.forBuyer)})
     </button>
   ) : (
-    <p className="err-text">Brak zapisanej soli w tej przeglądarce — głosu nie da się ujawnić.</p>
+    <p className="err-text">No saved salt in this browser — the vote can't be revealed.</p>
   );
 }

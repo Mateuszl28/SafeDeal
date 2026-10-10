@@ -89,15 +89,31 @@ export function useWallet() {
   return ctx;
 }
 
+export const PROGRAM_ERRORS: Record<string, string> = {
+  NotAllowed: "This person cannot perform this action.",
+  DeadlinePassed: "The deadline for this action has passed.",
+  DeadlineNotReached: "The deadline has not passed yet.",
+  WrongState: "The deal is in a different state.",
+  InvalidParams: "Invalid data.",
+  RevealNotOpen: "Vote reveal has not started yet.",
+  BadReveal: "The revealed vote does not match the earlier hash.",
+  OfferMismatch: "The settlement offer just changed — check the new amount.",
+  DrawNotReady: "The arbiter draw will be possible in a moment (waiting for a future slot).",
+  PoolTooSmall: "Not enough arbiters in the pool to draw a panel.",
+  PoolFull: "The arbiter pool is full.",
+  ArbiterBusy: "The arbiter has unsettled cases.",
+  ArbitersNotSettled: "The arbiters of this case must be settled first.",
+};
+
 /** Komunikat błędu programu (`#[msg]` z Anchora) zamiast surowego zrzutu logów. */
 function readableError(e: unknown, logs?: string[] | null): string {
   const all = [...(logs ?? []), e instanceof Error ? e.message : String(e)].join("\n");
   const m = all.match(/Error Code: (\w+)\. Error Number: \d+\. Error Message: ([^\n]+?)\.?(?:\n|$)/);
-  if (m) return `${m[2]} (${m[1]})`;
+  if (m) return `${PROGRAM_ERRORS[m[1]] ?? m[2]} (${m[1]})`;
   if (/insufficient lamports|insufficient funds for fee|Attempt to debit an account but found no record of a prior credit/i.test(all))
-    return "Brak testowego SOL na opłaty — użyj przycisku „+ SOL” albo faucet.solana.com.";
-  if (/insufficient funds/i.test(all)) return "Za mało testowego USDC — użyj kranu.";
-  if (/User rejected/i.test(all)) return "Transakcja odrzucona w portfelu.";
+    return "No test SOL for fees — use the “+ SOL” button or faucet.solana.com.";
+  if (/insufficient funds/i.test(all)) return "Not enough test USDC — use the faucet.";
+  if (/User rejected/i.test(all)) return "Transaction rejected in the wallet.";
   return all.split("\n").slice(-1)[0].slice(0, 300);
 }
 
@@ -212,16 +228,16 @@ function Inner({ children }: { children: ReactNode }) {
           tx.sign(signerKp);
           signature = await connection.sendRawTransaction(tx.serialize());
           const res = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
-          if (res.value.err) throw new Error(`Transakcja odrzucona: ${JSON.stringify(res.value.err)}`);
+          if (res.value.err) throw new Error(`Transaction rejected: ${JSON.stringify(res.value.err)}`);
         } else {
-          if (!adapter.publicKey) throw new Error("Najpierw połącz portfel.");
+          if (!adapter.publicKey) throw new Error("Connect your wallet first.");
           const tx = await build(adapter.publicKey);
           const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
           tx.recentBlockhash = blockhash;
           tx.feePayer = adapter.publicKey;
           signature = await adapter.sendTransaction(tx, connection);
           const res = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
-          if (res.value.err) throw new Error(`Transakcja odrzucona: ${JSON.stringify(res.value.err)}`);
+          if (res.value.err) throw new Error(`Transaction rejected: ${JSON.stringify(res.value.err)}`);
         }
         setLastTx({ signature, label });
         refresh();
@@ -264,20 +280,20 @@ function Inner({ children }: { children: ReactNode }) {
       try {
         const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
         const j = (await r.json()) as { transaction?: string; message?: string };
-        if (!r.ok || !j.transaction) throw new Error(j.message ?? "Serwer nie przygotował transakcji.");
+        if (!r.ok || !j.transaction) throw new Error(j.message ?? "The server did not prepare the transaction.");
         const tx = Transaction.from(Buffer.from(j.transaction, "base64"));
         let signed: Transaction;
         if (mode === "demo") {
-          if (!persona) throw new Error("Brak persony.");
+          if (!persona) throw new Error("No persona.");
           tx.partialSign(persona.keypair);
           signed = tx;
         } else {
-          if (!adapter.signTransaction) throw new Error("Portfel nie obsługuje podpisu transakcji.");
+          if (!adapter.signTransaction) throw new Error("This wallet does not support signing transactions.");
           signed = await adapter.signTransaction(tx);
         }
         const signature = await connection.sendRawTransaction(signed.serialize());
         const res = await connection.confirmTransaction(signature, "confirmed");
-        if (res.value.err) throw new Error(`Transakcja odrzucona: ${JSON.stringify(res.value.err)}`);
+        if (res.value.err) throw new Error(`Transaction rejected: ${JSON.stringify(res.value.err)}`);
         setLastTx({ signature, label });
         refresh();
         return signature;
@@ -304,7 +320,7 @@ function Inner({ children }: { children: ReactNode }) {
       if (!deployment || !program) return null;
       const kp = signerFor(opts?.asOracle);
       if (!kp && mode === "demo") {
-        setError("Brak person demo — uruchom skrypt konfiguracji devnetu.");
+        setError("No demo personas — run the devnet setup script.");
         return null;
       }
       if (fn === "createDeal" && mode === "wallet" && deployment.cluster === "devnet" && adapter.publicKey) {
@@ -313,7 +329,7 @@ function Inner({ children }: { children: ReactNode }) {
         return sendServerTx(
           "/api/sponsor/create-deal",
           { account: adapter.publicKey.toBase58(), args: { ...a, amount: a.amount.toString() } },
-          opts?.label ?? "Utworzono ofertę",
+          opts?.label ?? "Listing created",
         );
       }
       return send(
@@ -337,30 +353,30 @@ function Inner({ children }: { children: ReactNode }) {
   );
 
   const faucet = useCallback(async () => {
-    await write("faucet", [], { label: "Kran testowego USDC" });
+    await write("faucet", [], { label: "Test USDC faucet" });
   }, [write]);
 
   const airdrop = useCallback(async (): Promise<boolean> => {
     if (!address) return false;
-    setBusy("Pobieram testowy SOL na opłaty");
+    setBusy("Getting test SOL for fees");
     setError(null);
     try {
       // 1) sponsor opłat (nasz portfel na devnecie) — publiczne faucety bywają puste
       const r = await fetch("/api/sponsor", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address }) });
       const j = (await r.json()) as { ok?: boolean; signature?: string; skipped?: boolean; error?: string };
       if (r.ok && j.ok) {
-        if (j.signature) setLastTx({ signature: j.signature, label: "Sponsor: SOL na opłaty" });
+        if (j.signature) setLastTx({ signature: j.signature, label: "Sponsor: SOL for fees" });
         refresh();
         return true;
       }
       // 2) publiczny faucet devnetu
       const sig = await connection.requestAirdrop(new PublicKey(address), LAMPORTS_PER_SOL / 2);
       await connection.confirmTransaction(sig, "confirmed");
-      setLastTx({ signature: sig, label: "Airdrop 0,5 SOL" });
+      setLastTx({ signature: sig, label: "Airdrop 0.5 SOL" });
       refresh();
       return true;
     } catch {
-      setError("Nie udało się pobrać testowego SOL (sponsor i publiczny faucet odmówiły). Spróbuj https://faucet.solana.com");
+      setError("Could not get test SOL (both the sponsor and the public faucet refused). Try https://faucet.solana.com");
       return false;
     } finally {
       setBusy(null);
@@ -370,13 +386,13 @@ function Inner({ children }: { children: ReactNode }) {
   const prepareWallet = useCallback(async () => {
     if (!(await airdrop())) return;
     await new Promise((r) => setTimeout(r, 1500));
-    await write("faucet", [], { label: "Kran: 1000 testowych USDC" });
+    await write("faucet", [], { label: "Faucet: 1000 test USDC" });
   }, [airdrop, write]);
 
   const buySponsored = useCallback(
-    async (deal: Deal, label = "Wpłacono do sejfu"): Promise<string | null> => {
+    async (deal: Deal, label = "Deposited into escrow"): Promise<string | null> => {
       if (!address) {
-        setError("Najpierw połącz portfel.");
+        setError("Connect your wallet first.");
         return null;
       }
       return sendServerTx(`/api/actions/deal/${deal.id}`, { account: address }, label);
@@ -393,7 +409,7 @@ function Inner({ children }: { children: ReactNode }) {
           const nacl = await import("tweetnacl");
           return Buffer.from(nacl.sign.detached(bytes, persona.keypair.secretKey)).toString("hex");
         }
-        if (!adapter.signMessage) throw new Error("Portfel nie obsługuje podpisu wiadomości.");
+        if (!adapter.signMessage) throw new Error("This wallet does not support signing messages.");
         return Buffer.from(await adapter.signMessage(bytes)).toString("hex");
       } catch (e) {
         setError(readableError(e));

@@ -98,7 +98,7 @@ export async function relayDeal(program: Program, d: Deployment, deal: Deal, pay
     if (!close && !arbitersPending(deal)) return done;
     const ixs = await buildInstructions(program, d, payer.publicKey, close ? "closeDeal" : "settleArbiters", [], deal);
     await sendAs(connection, ixs, payer);
-    done.push(`#${deal.id}: ${close ? "zamknięcie kont (rent do sprzedawcy)" : "rozliczenie arbitrów"}`);
+    done.push(`#${deal.id}: ${close ? "closing accounts (rent to the seller)" : "settling arbiters"}`);
     return done;
   }
 
@@ -107,7 +107,7 @@ export async function relayDeal(program: Program, d: Deployment, deal: Deal, pay
     // Odbiorca wynika wyłącznie ze stanu transakcji — relayer nie ma tu żadnego wyboru.
     const ixs = await buildInstructions(program, d, payer.publicKey, "settleExpired", [], deal);
     await sendAs(connection, ixs, payer);
-    done.push(`#${deal.id}: rozliczenie po terminie`);
+    done.push(`#${deal.id}: settlement after deadline`);
     return done;
   }
 
@@ -115,7 +115,7 @@ export async function relayDeal(program: Program, d: Deployment, deal: Deal, pay
     if (BigInt(await connection.getSlot("confirmed")) <= deal.drawSlot) return done;
     const ixs = await buildInstructions(program, d, payer.publicKey, "drawPanel", [], deal);
     await sendAs(connection, ixs, payer);
-    done.push(`#${deal.id}: losowanie składu`);
+    done.push(`#${deal.id}: drawing the panel`);
     return done;
   }
 
@@ -138,9 +138,9 @@ export async function relayDeal(program: Program, d: Deployment, deal: Deal, pay
     try {
       const ixs = await buildInstructions(program, d, o.publicKey, "confirmDelivery", [], fresh);
       await sendAs(connection, ixs, o);
-      done.push(`#${deal.id}: źródło ${i + 1} potwierdza doręczenie (${why})`);
+      done.push(`#${deal.id}: source ${i + 1} confirms delivery (${why})`);
     } catch (e) {
-      done.push(`#${deal.id}: źródło ${i + 1} — ${e instanceof Error ? e.message.split("\n")[0] : e}`);
+      done.push(`#${deal.id}: source ${i + 1} — ${e instanceof Error ? e.message.split("\n")[0] : e}`);
     }
   }
   return done;
@@ -155,7 +155,7 @@ export async function relayAll(program: Program, d: Deployment, payer: Keypair |
   const start = Date.now();
   for (const deal of (await fetchAllDeals(program)).filter((x) => needsRelay(x, now, d))) {
     if (Date.now() - start > SCAN_BUDGET_MS) {
-      out.push("budżet czasu wyczerpany — reszta przy następnym wywołaniu");
+      out.push("time budget exhausted — the rest on the next call");
       break;
     }
     try {

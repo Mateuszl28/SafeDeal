@@ -12,22 +12,22 @@ const granted = new Set<string>();
 
 export async function POST(req: Request) {
   const d = serverDeployment();
-  if (!d || d.cluster !== "devnet") return Response.json({ error: "Sponsor działa tylko na devnecie." }, { status: 400 });
+  if (!d || d.cluster !== "devnet") return Response.json({ error: "The sponsor only works on devnet." }, { status: 400 });
   const sponsor = sponsorKey();
-  if (!sponsor) return Response.json({ error: "Brak portfela sponsora (solana/scripts/sponsor-setup.mjs)." }, { status: 503 });
+  if (!sponsor) return Response.json({ error: "No sponsor wallet (solana/scripts/sponsor-setup.mjs)." }, { status: 503 });
 
   let to: PublicKey;
   try {
     const body = (await req.json()) as { address?: string };
     to = new PublicKey(String(body.address));
   } catch {
-    return Response.json({ error: "Nieprawidłowy adres." }, { status: 400 });
+    return Response.json({ error: "Invalid address." }, { status: 400 });
   }
 
   const connection = serverConnection(d);
   const balance = await connection.getBalance(to);
   if (balance >= ENOUGH) return Response.json({ ok: true, skipped: true, balance: balance / LAMPORTS_PER_SOL });
-  if (granted.has(to.toBase58())) return Response.json({ error: "Ten portfel już dostał SOL od sponsora." }, { status: 429 });
+  if (granted.has(to.toBase58())) return Response.json({ error: "This wallet has already received SOL from the sponsor." }, { status: 429 });
 
   try {
     const signature = await sendAndConfirmTransaction(
@@ -39,6 +39,6 @@ export async function POST(req: Request) {
     granted.add(to.toBase58());
     return Response.json({ ok: true, signature, amount: GRANT / LAMPORTS_PER_SOL });
   } catch (e) {
-    return Response.json({ error: `Sponsor nie mógł wysłać SOL: ${e instanceof Error ? e.message.slice(0, 200) : e}` }, { status: 502 });
+    return Response.json({ error: `The sponsor couldn't send SOL: ${e instanceof Error ? e.message.slice(0, 200) : e}` }, { status: 502 });
   }
 }

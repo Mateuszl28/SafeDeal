@@ -36,20 +36,20 @@ function Bars({ title, bars, empty }: { title: string; bars: Bar[]; empty: strin
                 </span>
                 {hover === i && (
                   <span className="bar-tip" role="tooltip">
-                    <b>{b.label}</b>: {b.value} z {total} ({Math.round((b.value / total) * 100)}%)
+                    <b>{b.label}</b>: {b.value} of {total} ({Math.round((b.value / total) * 100)}%)
                   </span>
                 )}
               </li>
             ))}
           </ul>
           <details className="as-table">
-            <summary>Pokaż jako tabelę</summary>
+            <summary>Show as table</summary>
             <table>
               <thead>
                 <tr>
-                  <th>Kategoria</th>
-                  <th>Liczba</th>
-                  <th>Udział</th>
+                  <th>Category</th>
+                  <th>Count</th>
+                  <th>Share</th>
                 </tr>
               </thead>
               <tbody>
@@ -117,89 +117,89 @@ export default function StatsPage() {
   const absences = pool?.arbiters.reduce((s, a) => s + a.missed, 0) ?? 0;
 
   const outcomes: Bar[] = [
-    { label: "Wypłata dla sprzedawcy", value: count(deals, State.Released) },
-    { label: "Zwrot dla kupującego", value: count(deals, State.Refunded) },
-    { label: "Ugoda stron", value: count(deals, State.Settled) },
-    { label: "Podział 50/50", value: count(deals, State.Split) },
-    { label: "Anulowana oferta", value: count(deals, State.Cancelled) },
+    { label: "Payout to seller", value: count(deals, State.Released) },
+    { label: "Refund to buyer", value: count(deals, State.Refunded) },
+    { label: "Settlement between parties", value: count(deals, State.Settled) },
+    { label: "50/50 split", value: count(deals, State.Split) },
+    { label: "Cancelled offer", value: count(deals, State.Cancelled) },
   ];
   const pipeline: Bar[] = [
-    { label: "Czeka na kupującego", value: count(deals, State.Created) },
-    { label: "Opłacona, przed nadaniem", value: count(deals, State.Funded) },
-    { label: "W drodze", value: count(deals, State.Shipped) },
-    { label: "Okno reklamacji", value: count(deals, State.Delivered) },
-    { label: "Spór lub arbitraż", value: count(deals, State.Disputed, State.InArbitration) },
+    { label: "Waiting for a buyer", value: count(deals, State.Created) },
+    { label: "Paid, not yet shipped", value: count(deals, State.Funded) },
+    { label: "In transit", value: count(deals, State.Shipped) },
+    { label: "Complaint window", value: count(deals, State.Delivered) },
+    { label: "Dispute or arbitration", value: count(deals, State.Disputed, State.InArbitration) },
   ];
 
   return (
     <div className="grid">
       <section className="hero">
-        <h1>Statystyki na żywo</h1>
-        <p>Liczone bezpośrednio z publicznego rejestru — każdy może je sprawdzić, nikt nie może ich podkręcić.</p>
+        <h1>Live stats</h1>
+        <p>Computed directly from the public ledger — anyone can verify them, nobody can inflate them.</p>
       </section>
 
       <section className="card wide tiles">
         <div className="tile">
-          <span className="tile-label">Teraz zablokowane w sejfach</span>
+          <span className="tile-label">Currently locked in vaults</span>
           <b>{fmtUsdc(locked)}</b>
           <Pln usdc={locked} />
-          <span className="muted small">wpłaty i kaucje, których nikt nie może ruszyć</span>
+          <span className="muted small">payments and bonds nobody can touch</span>
         </div>
         <div className="tile">
-          <span className="tile-label">Przeszło przez SafeDeal</span>
+          <span className="tile-label">Processed through SafeDeal</span>
           <b>{fmtUsdc(volume)}</b>
           <Pln usdc={volume} />
-          <span className="muted small">{plural(closed.length, "zamknięta transakcja", "zamknięte transakcje", "zamkniętych transakcji")}</span>
+          <span className="muted small">{plural(closed.length, "completed deal", "completed deals", "completed deals")}</span>
         </div>
         <div className="tile">
-          <span className="tile-label">Trafiło do sporu</span>
+          <span className="tile-label">Went to dispute</span>
           <b>{disputeRate}%</b>
           <span className="muted small">
-            {disputed} z {funded.length} opłaconych transakcji
+            {disputed} of {funded.length} funded deals
           </span>
         </div>
         <div className="tile">
-          <span className="tile-label">Zamknięte bez arbitrów</span>
+          <span className="tile-label">Closed without arbiters</span>
           <b>
             {noArbiters}/{closed.length}
           </b>
-          <span className="muted small">kod, termin lub ugoda rozstrzygnęły same</span>
+          <span className="muted small">resolved by code, deadline or settlement</span>
         </div>
       </section>
 
       <section className="card wide">
-        <h2>Arbitrzy i porządki</h2>
+        <h2>Arbiters and cleanup</h2>
         <div className="tiles">
           <div className="tile">
-            <span className="tile-label">Otwarta pula arbitrów</span>
-            <b>{pool ? plural(pool.members, "osoba", "osoby", "osób") : "…"}</b>
+            <span className="tile-label">Open arbiter pool</span>
+            <b>{pool ? plural(pool.members, "person", "people", "people") : "…"}</b>
             <span className="muted small">
-              {pool ? <>kaucje w sejfie puli: {fmtUsdc(pool.staked)}</> : "wczytuję…"} ·{" "}
+              {pool ? <>bonds in the pool vault: {fmtUsdc(pool.staked)}</> : "loading…"} ·{" "}
               <Link href="/arbitrzy" className="plink">
-                pula →
+                pool →
               </Link>
             </span>
           </div>
           <div className="tile">
-            <span className="tile-label">Spory rozstrzygnięte głosami</span>
+            <span className="tile-label">Disputes resolved by vote</span>
             <b>{byVote}</b>
-            <span className="muted small">skład losowany z puli, głosy niejawne</span>
+            <span className="muted small">panel drawn from the pool, secret votes</span>
           </div>
           <div className="tile">
-            <span className="tile-label">Ukarane nieobecności</span>
+            <span className="tile-label">Penalized absences</span>
             <b>{pool ? absences : "…"}</b>
-            <span className="muted small">arbiter bez głosu traci {fmtUsdc(BigInt(w.deployment.missSlash ?? 0))} kaucji (spalane)</span>
+            <span className="muted small">an arbiter who doesn't vote loses {fmtUsdc(BigInt(w.deployment.missSlash ?? 0))} of their bond (burned)</span>
           </div>
           <div className="tile">
-            <span className="tile-label">Zamknięte konta</span>
+            <span className="tile-label">Closed accounts</span>
             <b>{archived}</b>
-            <span className="muted small">rent wrócił do sprzedawców; opis zostaje w historii łańcucha</span>
+            <span className="muted small">rent returned to sellers; the description stays in the chain history</span>
           </div>
         </div>
       </section>
 
-      <Bars title="Jak kończą się transakcje" bars={outcomes} empty="Żadna transakcja jeszcze się nie zakończyła." />
-      <Bars title="Transakcje w toku" bars={pipeline} empty="Nic nie jest teraz w toku." />
+      <Bars title="How deals end" bars={outcomes} empty="No deal has finished yet." />
+      <Bars title="Deals in progress" bars={pipeline} empty="Nothing is in progress right now." />
       <ProgramRules />
     </div>
   );

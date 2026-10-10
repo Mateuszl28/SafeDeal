@@ -41,40 +41,40 @@ function verify(payload: string, signatureHex: string, from: string): boolean {
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = context(req, id);
-  if (!ctx) return NextResponse.json({ error: "Nieznana sieć lub transakcja" }, { status: 400 });
+  if (!ctx) return NextResponse.json({ error: "Unknown network or deal" }, { status: 400 });
   return NextResponse.json(await load(ctx.file));
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = context(req, id);
-  if (!ctx) return NextResponse.json({ error: "Nieznana sieć lub transakcja" }, { status: 400 });
+  if (!ctx) return NextResponse.json({ error: "Unknown network or deal" }, { status: 400 });
 
   const msg = (await req.json()) as ChatMessage;
   const text = typeof msg.text === "string" ? msg.text.trim() : "";
   if (typeof msg.from !== "string" || typeof msg.signature !== "string" || !text || text.length > CHAT_MAX_LEN || typeof msg.ts !== "number") {
-    return NextResponse.json({ error: "Nieprawidłowa wiadomość" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid message" }, { status: 400 });
   }
   if (Math.abs(Date.now() - msg.ts) > 5 * 60_000) {
-    return NextResponse.json({ error: "Wiadomość jest przeterminowana" }, { status: 400 });
+    return NextResponse.json({ error: "The message has expired" }, { status: 400 });
   }
 
   const payload = chatPayload(ctx.cluster, ctx.deployment.programId, id, msg.ts, text);
-  if (!verify(payload, msg.signature, msg.from)) return NextResponse.json({ error: "Podpis nie pasuje do nadawcy" }, { status: 401 });
+  if (!verify(payload, msg.signature, msg.from)) return NextResponse.json({ error: "The signature doesn't match the sender" }, { status: 401 });
 
   // Pisać mogą tylko strony transakcji — sprawdzamy to w koncie transakcji w sieci, nie w bazie aplikacji.
   let parties: string[];
   try {
     const connection = new Connection(process.env.NEXT_PUBLIC_RPC || ctx.deployment.rpc, "confirmed");
     const info = await connection.getAccountInfo(pdas(ctx.deployment.programId).deal(BigInt(id)));
-    if (!info) return NextResponse.json({ error: "Nie ma takiej transakcji" }, { status: 404 });
+    if (!info) return NextResponse.json({ error: "No such deal" }, { status: 404 });
     const deal = coder.accounts.decode("Deal", info.data) as { seller: PublicKey; buyer: PublicKey };
     parties = [deal.seller.toBase58(), deal.buyer.toBase58()];
   } catch {
-    return NextResponse.json({ error: "Nie udało się odczytać transakcji z sieci — spróbuj za chwilę" }, { status: 502 });
+    return NextResponse.json({ error: "Couldn't read the deal from the network — try again in a moment" }, { status: 502 });
   }
   if (!parties.includes(msg.from)) {
-    return NextResponse.json({ error: "Tylko strony transakcji mogą pisać w tej rozmowie" }, { status: 403 });
+    return NextResponse.json({ error: "Only the parties to the deal can post in this chat" }, { status: 403 });
   }
 
   const messages = await load(ctx.file);

@@ -32,10 +32,10 @@ export function useHashCheck(uri: string, hash: string) {
 }
 
 export const CHECK_LABEL: Record<Check, string> = {
-  checking: "Sprawdzam hash…",
-  ok: "✓ Plik zgodny z hashem zapisanym on-chain",
-  mismatch: "✗ Plik zmieniony po fakcie — hash się nie zgadza!",
-  missing: "Plik niedostępny",
+  checking: "Checking hash…",
+  ok: "✓ File matches the hash stored on-chain",
+  mismatch: "✗ File was changed afterwards — the hash does not match!",
+  missing: "File unavailable",
 };
 
 /** Wysyła plik do magazynu (w demo: lokalny, docelowo IPFS) i zwraca adres oraz hash do zapisania on-chain. */

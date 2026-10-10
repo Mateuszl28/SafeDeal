@@ -26,9 +26,9 @@ function throttled(key: string, ms: number): boolean {
 
 export async function GET(req: Request) {
   const d = serverDeployment();
-  if (!d) return Response.json({ message: "Brak wdrożenia programu." }, { status: 503 });
+  if (!d) return Response.json({ message: "Program is not deployed." }, { status: 503 });
   const idParam = new URL(req.url).searchParams.get("deal");
-  if (idParam !== null && !/^\d{1,18}$/.test(idParam)) return Response.json({ message: "Nieprawidłowy numer." }, { status: 400 });
+  if (idParam !== null && !/^\d{1,18}$/.test(idParam)) return Response.json({ message: "Invalid number." }, { status: 400 });
 
   const key = idParam ?? "*";
   if (throttled(key, idParam ? PER_DEAL_MS : FULL_SCAN_MS)) return Response.json({ skipped: "throttled" });

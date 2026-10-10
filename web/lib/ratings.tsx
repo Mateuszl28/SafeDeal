@@ -25,7 +25,7 @@ export function useRating(address?: Address) {
 export function Stars({ value, size = "1em" }: { value: number; size?: string }) {
   const full = Math.round(value);
   return (
-    <span className="stars" style={{ fontSize: size }} aria-label={`${value.toFixed(1)} na 5 gwiazdek`}>
+    <span className="stars" style={{ fontSize: size }} aria-label={`${value.toFixed(1)} out of 5 stars`}>
       {"★".repeat(full)}
       <span className="stars-off">{"★".repeat(5 - full)}</span>
     </span>

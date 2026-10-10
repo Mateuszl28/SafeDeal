@@ -7,7 +7,7 @@ import { createTransferInstruction, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { State, STATE_LABEL, isFinal, type Deal } from "@/lib/contracts";
 import { fmtUsdc, short } from "@/lib/format";
 import { ata, explorerAddr, fetchAllDeals, pdas } from "@/lib/solana";
-import { PERSONAS, nameOf, useWallet } from "@/lib/wallet";
+import { PERSONAS, PROGRAM_ERRORS, nameOf, useWallet } from "@/lib/wallet";
 import { ProgramRules } from "@/components/Governance";
 
 const BPF_UPGRADEABLE = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
@@ -39,11 +39,11 @@ function explain(logs: string[], err: unknown): string {
   const all = logs.join("\n");
   const m = all.match(/Error Code: (\w+)\. Error Number: \d+\. Error Message: ([^\n]+?)\.?(?:\n|$)/);
   if (m?.[1] === "ConstraintHasOne")
-    return "rent może trafić tylko do sprzedawcy zapisanego w transakcji (has_one = seller) — podmiana odbiorcy nie przechodzi (ConstraintHasOne)";
-  if (m) return `${m[2]} (${m[1]})`;
-  if (/owner does not match/i.test(all)) return "Program tokenów: podpisujący nie jest właścicielem sejfu — klucza do sejfu nie ma nikt, ma go tylko program (PDA).";
-  if (/custom program error: 0x4\b/.test(all)) return "Program tokenów: podpisujący nie jest właścicielem sejfu.";
-  if (/insufficient/i.test(all)) return "Brak środków na koncie atakującego.";
+    return "rent can only go to the seller recorded in the deal (has_one = seller) — swapping the recipient fails (ConstraintHasOne)";
+  if (m) return `${PROGRAM_ERRORS[m[1]] ?? m[2]} (${m[1]})`;
+  if (/owner does not match/i.test(all)) return "Token program: the signer is not the vault owner — nobody holds a key to the vault, only the program (PDA) does.";
+  if (/custom program error: 0x4\b/.test(all)) return "Token program: the signer is not the vault owner.";
+  if (/insufficient/i.test(all)) return "Insufficient funds in the attacker's account.";
   return typeof err === "string" ? err : JSON.stringify(err);
 }
 
@@ -95,10 +95,10 @@ export default function JuryPage() {
       out.push(
         {
           id: "panel",
-          title: arbTarget.panelDrawn ? "Wylosuj skład arbitrów jeszcze raz — tym razem ze mną" : "Wpisz siebie do składu arbitrów zamiast losowania",
+          title: arbTarget.panelDrawn ? "Redraw the arbiter panel — this time with me on it" : "Put myself on the arbiter panel instead of drawing",
           who,
           on: arbTarget,
-          why: "Program sam liczy skład z hasha slotu i porównuje go z podanymi kontami — wywołujący nie ma wpływu na wynik losowania.",
+          why: "The program computes the panel from the slot hash itself and compares it with the given accounts — the caller has no influence on the draw.",
           // Podajemy „swoje” konto arbitra trzy razy — program sam liczy skład z hasha slotu i porównuje adresy.
           build: async () => [
             await m
@@ -110,10 +110,10 @@ export default function JuryPage() {
         },
         {
           id: "vote",
-          title: "Zagłosuj w sporze, choć nie wylosowano mnie do składu",
+          title: "Vote in a dispute even though I wasn't drawn for the panel",
           who,
           on: arbTarget,
-          why: "Głosować mogą tylko 3 osoby wylosowane do tej sprawy (deal.panel).",
+          why: "Only the 3 people drawn for this case can vote (deal.panel).",
           build: async () => [
             await m
               .commitVote(Array.from(crypto.getRandomValues(new Uint8Array(32))))
@@ -129,7 +129,7 @@ export default function JuryPage() {
       const vault = p.vault(dealPda);
       out.push({
         id: "rent",
-        title: "Zamknij konta transakcji, ale rent wyślij do mnie",
+        title: "Close the deal accounts, but send the rent to me",
         who,
         on: closedTarget,
         build: async () => [
@@ -143,10 +143,10 @@ export default function JuryPage() {
       if (i >= 0) {
         out.push({
           id: "reward",
-          title: "Rozlicz arbitra, ale jego nagrodę wyślij na moje konto",
+          title: "Settle an arbiter, but send their reward to my account",
           who,
           on: closedTarget,
-          why: "Konto na nagrodę musi należeć do arbitra ze składu (arbiter_ata.owner == deal.panel[i]).",
+          why: "The reward account must belong to an arbiter on the panel (arbiter_ata.owner == deal.panel[i]).",
           build: async () => [
             await m
               .settleArbiter(i)
@@ -186,28 +186,28 @@ export default function JuryPage() {
       {
         id: "vault",
         on: target,
-        title: "Wypłać pieniądze prosto z sejfu, z pominięciem programu",
+        title: "Withdraw money straight from the vault, bypassing the program",
         who,
         build: async () => [createTransferInstruction(vault, myAta, me, target.amount)],
       },
       {
         id: "redirect",
         on: target,
-        title: "Zwróć pieniądze „kupującemu”, ale na moje konto",
+        title: "Refund the “buyer”, but to my account",
         who,
         build: async () => [await m.refundBuyer().accountsPartial(payout(myAta, ata(d.mint, target.seller))).instruction()],
       },
       {
         id: "receipt",
         on: target,
-        title: "Potwierdź odbiór zamiast kupującego",
+        title: "Confirm receipt on behalf of the buyer",
         who,
         build: async () => [await m.confirmReceipt().accountsPartial(payout(ata(d.mint, target.buyer), ata(d.mint, target.seller))).instruction()],
       },
       {
         id: "early",
         on: target,
-        title: expired ? "Rozlicz po terminie (to akurat wolno każdemu)" : "Rozlicz transakcję przed terminem",
+        title: expired ? "Settle after the deadline (anyone is allowed to do this)" : "Settle the deal before the deadline",
         who,
         build: async () => [await m.settleExpired().accountsPartial(payout(ata(d.mint, target.buyer), ata(d.mint, target.seller))).instruction()],
       },
@@ -233,11 +233,11 @@ export default function JuryPage() {
               ok: true,
               text:
                 a.id === "early"
-                  ? `Dozwolone: termin minął, więc rozliczyć może każdy — ale pieniądze trafią tylko tam, gdzie każe reguła (${target?.state === State.Funded ? "zwrot do kupującego" : "wypłata do sprzedawcy"}), nie do wywołującego.`
+                  ? `Allowed: the deadline has passed, so anyone can settle — but the money only goes where the rule says (${target?.state === State.Funded ? "refund to the buyer" : "payout to the seller"}), not to the caller.`
                   : a.id === "panel"
                     ? // Jedyna gałąź draw_panel, która kończy się bez sprawdzania kont: slot losowania wypadł z historii.
-                      "Nikogo nie wpisano: slot losowania wypadł już z historii łańcucha, więc program tylko przesunął losowanie na nowy, przyszły slot (DrawRescheduled). Podane konta w ogóle nie zostały użyte."
-                    : "Program przepuściłby tę transakcję — warunek jest spełniony.",
+                      "Nobody was added: the draw slot has already dropped out of the chain history, so the program just moved the draw to a new, future slot (DrawRescheduled). The given accounts weren't used at all."
+                    : "The program would allow this transaction — the condition is met.",
               logs,
             },
       }));
@@ -250,10 +250,10 @@ export default function JuryPage() {
   return (
     <div className="grid">
       <section className="hero wide">
-        <h1>Dla jury: sprawdź sam</h1>
+        <h1>For the jury: check it yourself</h1>
         <p>
-          Wszystko na tej stronie pochodzi prosto z Solany (devnet) — nie z naszej bazy. Jeśli coś tu twierdzimy, możesz to
-          zweryfikować w Solana Explorer albo w kodzie programu.
+          Everything on this page comes straight from Solana (devnet) — not from our database. Anything we claim here, you can
+          verify in Solana Explorer or in the program code.
         </p>
       </section>
 
@@ -262,78 +262,78 @@ export default function JuryPage() {
         {d ? (
           <>
             <p>
-              <span className="muted">Adres: </span>
+              <span className="muted">Address: </span>
               <a className="plink mono" href={explorerAddr(d.programId, d.cluster)} target="_blank" rel="noreferrer">
                 {d.programId} ↗
               </a>
             </p>
             <p>
-              <span className="muted">Czy autor może zmienić kod? </span>
+              <span className="muted">Can the author change the code? </span>
               {upgrade === undefined ? (
-                "sprawdzam…"
+                "checking…"
               ) : upgrade === null ? (
-                <b>Nie udało się odczytać konta programu w tej sieci — sprawdź w Explorerze.</b>
+                <b>Couldn't read the program account on this network — check in the Explorer.</b>
               ) : upgrade.authority === null ? (
-                <b>Nie — program jest niezmienny (brak upgrade authority).</b>
+                <b>No — the program is immutable (no upgrade authority).</b>
               ) : (
                 <>
-                  <b>Jeszcze tak</b> — upgrade authority:{" "}
+                  <b>Yes, for now</b> — upgrade authority:{" "}
                   <a className="plink mono" href={explorerAddr(upgrade.authority, d.cluster)} target="_blank" rel="noreferrer">
                     {short(upgrade.authority)} ↗
                   </a>
-                  . Mówimy to wprost: po ostatnich poprawkach odbierzemy je na stałe (<code>set-upgrade-authority --final</code>).
-                  Reguł w konfiguracji nie zmieni nikt już teraz — program nie ma instrukcji administratora.
+                  . We say it plainly: after the final fixes we'll revoke it permanently (<code>set-upgrade-authority --final</code>).
+                  Nobody can change the configured rules even now — the program has no admin instruction.
                 </>
               )}
             </p>
           </>
         ) : (
-          <p className="muted">Brak wdrożenia.</p>
+          <p className="muted">No deployment.</p>
         )}
       </section>
 
       <section className="card">
-        <h2>Gdzie w kodzie znika pośrednik</h2>
+        <h2>Where the middleman disappears in the code</h2>
         <ul className="code-refs">
           <li>
-            <code>CreateDeal</code> — sejf to konto tokenowe z <code>token::authority = deal</code>: właścicielem jest adres programu (PDA), nie człowiek.
+            <code>CreateDeal</code> — the vault is a token account with <code>token::authority = deal</code>: its owner is a program address (PDA), not a person.
           </li>
           <li>
-            <code>pay_raw</code> — jedyna droga wyjścia z sejfu; przelew podpisuje PDA transakcji (<code>new_with_signer</code>).
+            <code>pay_raw</code> — the only way out of the vault; the transfer is signed by the deal PDA (<code>new_with_signer</code>).
           </li>
           <li>
-            <code>Payout</code> — konta odbiorców przypięte do adresów stron: <code>buyer_ata.owner == deal.buyer</code>.
+            <code>Payout</code> — recipient accounts are pinned to the parties' addresses: <code>buyer_ata.owner == deal.buyer</code>.
           </li>
           <li>
-            <code>settle_expired</code> — po terminie wynik zależy tylko od stanu; wywołać może każdy.
+            <code>settle_expired</code> — after the deadline the outcome depends only on the state; anyone can call it.
           </li>
           <li>
-            <code>draw_panel</code> — skład arbitrów liczy program z hasha slotu, który powstał po przyjęciu sporu; wywołujący tylko
-            podaje konta, a program sprawdza każdy adres.
+            <code>draw_panel</code> — the program computes the arbiter panel from a slot hash created after the dispute was accepted; the caller only
+            passes the accounts, and the program checks every address.
           </li>
           <li>
-            <code>CloseDeal</code> — rent wraca na adres sprzedawcy zapisany w transakcji (<code>has_one = seller</code>), kto by nie zamykał.
+            <code>CloseDeal</code> — rent goes back to the seller address recorded in the deal (<code>has_one = seller</code>), no matter who closes it.
           </li>
         </ul>
         <p className="muted small">
-          Plik: <code>solana/programs/safedeal/src/lib.rs</code> (Anchor). Testy scenariuszy: <code>solana/scripts/e2e.mjs</code>.
+          File: <code>solana/programs/safedeal/src/lib.rs</code> (Anchor). Scenario tests: <code>solana/scripts/e2e.mjs</code>.
         </p>
       </section>
 
       <section className="card wide">
-        <h2>Spróbuj oszukać program</h2>
+        <h2>Try to cheat the program</h2>
         {attempts.length === 0 && attacker ? (
-          <p className="muted">Brak transakcji z pieniędzmi w sejfie — kup najpierw dowolną ofertę.</p>
+          <p className="muted">No deals with money in the vault — buy any offer first.</p>
         ) : !attacker ? (
-          <p className="muted">Połącz portfel albo przełącz się na tryb demo.</p>
+          <p className="muted">Connect a wallet or switch to demo mode.</p>
         ) : (
           <>
             {!target && (
-              <p className="muted small">Próby na sejfie z pieniędzmi pojawią się, gdy ktoś kupi dowolną ofertę.</p>
+              <p className="muted small">Attempts on a vault with money will appear once someone buys any offer.</p>
             )}
             <p className="muted small">
-              Atakuje: <b>{nameOf(attacker) ?? short(attacker)}</b> (nie jest stroną żadnej z tych transakcji ani arbitrem w ich sporach). Każda
-              próba to prawdziwa transakcja wysłana do sieci w trybie symulacji: ta sama walidacja, bez opłat i bez zmiany stanu.
+              Attacker: <b>{nameOf(attacker) ?? short(attacker)}</b> (not a party to any of these deals nor an arbiter in their disputes). Each
+              attempt is a real transaction sent to the network in simulation mode: the same validation, no fees and no state change.
             </p>
             <div className="attempts">
               {attempts.map((a) => {
@@ -345,25 +345,25 @@ export default function JuryPage() {
                         <b>{a.title}</b>
                         <br />
                         <small className="muted">
-                          cel:{" "}
+                          target:{" "}
                           <Link className="plink" href={`/deal/${a.on.id}`}>
                             #{String(a.on.id)} {a.on.title}
                           </Link>{" "}
                           · {STATE_LABEL[a.on.state]}
-                          {a.on.state >= State.Funded && a.on.state <= State.Delivered && <> · w sejfie {fmtUsdc(a.on.amount)}</>}
+                          {a.on.state >= State.Funded && a.on.state <= State.Delivered && <> · in vault {fmtUsdc(a.on.amount)}</>}
                         </small>
                       </span>
                       <button className="btn ghost sm" disabled={r === "running"} onClick={() => run(a)}>
-                        {r === "running" ? "Sprawdzam…" : "Spróbuj"}
+                        {r === "running" ? "Checking…" : "Try it"}
                       </button>
                     </div>
                     {r && r !== "running" && (
                       <div className={`attempt-result ${r.ok && !SAFE_OK.includes(a.id) ? "passed" : "blocked"}`}>
-                        <span>{r.ok ? (SAFE_OK.includes(a.id) ? "✓ " : "⚠ ") : "✗ Odrzucone: "}{r.text}</span>
+                        <span>{r.ok ? (SAFE_OK.includes(a.id) ? "✓ " : "⚠ ") : "✗ Rejected: "}{r.text}</span>
                         {!r.ok && a.why && <small className="muted">{a.why}</small>}
                         {r.logs.length > 0 && (
                           <details>
-                            <summary>logi programu</summary>
+                            <summary>program logs</summary>
                             <pre>{r.logs.slice(-8).join("\n")}</pre>
                           </details>
                         )}

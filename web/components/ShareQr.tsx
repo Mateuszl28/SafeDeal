@@ -18,14 +18,14 @@ export function ShareQr({ id }: { id: string }) {
   return (
     <>
       <button className="btn ghost sm" onClick={() => setOpen((o) => !o)}>
-        {open ? "Ukryj kod QR" : "Kod QR do ogłoszenia"}
+        {open ? "Hide QR code" : "QR code for your listing"}
       </button>
       {open && src && (
         <div className="qr">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={src} alt={`Kod QR z linkiem do oferty #${id}`} width={160} height={160} />
-          <a className="btn ghost sm" href={src} download={`safedeal-oferta-${id}.png`}>
-            Pobierz PNG
+          <img src={src} alt={`QR code linking to offer #${id}`} width={160} height={160} />
+          <a className="btn ghost sm" href={src} download={`safedeal-offer-${id}.png`}>
+            Download PNG
           </a>
         </div>
       )}

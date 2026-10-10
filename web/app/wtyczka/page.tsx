@@ -20,7 +20,7 @@ function Snippet({ label, code }: { label: string; code: string }) {
             setTimeout(() => setCopied(false), 1500);
           }}
         >
-          {copied ? "Skopiowano ✓" : "Kopiuj"}
+          {copied ? "Copied ✓" : "Copy"}
         </button>
       </div>
       <pre className="mono">{code}</pre>
@@ -55,19 +55,19 @@ export default function PluginPage() {
   return (
     <div className="grid">
       <section className="hero">
-        <h1>Wtyczka: „Kup przez SafeDeal” w każdym ogłoszeniu</h1>
+        <h1>Plugin: “Buy with SafeDeal” in any listing</h1>
         <p>
-          SafeDeal działa poza naszą stroną: sprzedawca wkleja kartę oferty w ogłoszenie na dowolnym serwisie, a serwis z ogłoszeniami
-          może dodać ją jedną linijką kodu. Kupujący widzi gwarancje i kupuje jednym podpisem — pieniądze trafiają do sejfu programu, nie
-          do serwisu i nie do nas.
+          SafeDeal works beyond our site: a seller pastes an offer card into a listing on any marketplace, and a classifieds site
+          can add it with one line of code. The buyer sees the guarantees and buys with a single signature — the money goes to the program's vault, not
+          to the marketplace and not to us.
         </p>
       </section>
 
       <section className="card">
-        <h2>Która oferta?</h2>
+        <h2>Which offer?</h2>
         <label>
-          Numer oferty
-          <input value={id} onChange={(e) => setId(e.target.value.trim())} inputMode="numeric" placeholder="np. 12" />
+          Offer number
+          <input value={id} onChange={(e) => setId(e.target.value.trim())} inputMode="numeric" placeholder="e.g. 12" />
         </label>
         {choices.length > 0 && (
           <div className="chips">
@@ -79,65 +79,65 @@ export default function PluginPage() {
           </div>
         )}
         <label>
-          Motyw karty
+          Card theme
           <select value={theme} onChange={(e) => setTheme(e.target.value as typeof theme)}>
-            <option value="auto">jak w systemie odwiedzającego</option>
-            <option value="light">jasny</option>
-            <option value="dark">ciemny</option>
+            <option value="auto">match the visitor's system</option>
+            <option value="light">light</option>
+            <option value="dark">dark</option>
           </select>
         </label>
         <p className="muted small">
-          Karta to zwykły HTML z naszego serwera, czytany wprost z blockchaina — działa bez JavaScriptu i nie ma dostępu do portfela ani
-          danych odwiedzającego.
+          The card is plain HTML from our server, read straight from the blockchain — it works without JavaScript and has no access to the visitor's
+          wallet or data.
         </p>
       </section>
 
       <section className="card">
-        <h2>Podgląd</h2>
+        <h2>Preview</h2>
         {valid ? (
           <iframe
             key={`${id}-${theme}`}
             src={`/widget/deal/${id}${themeQuery}`}
-            title="Podgląd karty SafeDeal"
+            title="SafeDeal card preview"
             style={{ border: 0, width: "100%", maxWidth: 420, height: 360, background: "transparent" }}
           />
         ) : (
-          <p className="muted">Podaj numer oferty.</p>
+          <p className="muted">Enter an offer number.</p>
         )}
       </section>
 
       {valid && (
         <section className="card wide">
-          <h2>Kod do wklejenia</h2>
+          <h2>Code to paste</h2>
           <Snippet
-            label="Serwis z ogłoszeniami — skrypt (raz na stronie) + miejsce na kartę"
+            label="Classifieds site — script (once per page) + card placeholder"
             code={`<script src="${origin}/widget.js" async></script>\n<div data-safedeal-deal="${id}"${themeAttr}></div>`}
           />
           <Snippet
-            label="Bez skryptu — iframe"
-            code={`<iframe src="${origin}/widget/deal/${id}${themeQuery}" title="SafeDeal — bezpieczny zakup" style="border:0;width:100%;max-width:420px;height:300px"></iframe>`}
+            label="No script — iframe"
+            code={`<iframe src="${origin}/widget/deal/${id}${themeQuery}" title="SafeDeal — safe purchase" style="border:0;width:100%;max-width:420px;height:300px"></iframe>`}
           />
-          <Snippet label="Sprzedawca — link do wklejenia w treść ogłoszenia lub w czat" code={`${origin}/deal/${id}`} />
+          <Snippet label="Seller — link to paste into a listing or a chat" code={`${origin}/deal/${id}`} />
           <Snippet
-            label="Blink (Solana Actions) — zakup prosto z posta na X lub z portfela"
+            label="Blink (Solana Actions) — buy straight from a post on X or from a wallet"
             code={`https://dial.to/?action=solana-action:${encodeURIComponent(`${origin}/api/actions/deal/${id}`)}&cluster=devnet`}
           />
         </section>
       )}
 
       <section className="card wide">
-        <h2>Dla serwisów: przycisk „Sprzedaj przez SafeDeal”</h2>
+        <h2>For marketplaces: a “Sell with SafeDeal” button</h2>
         <p className="muted">
-          Serwis wstawia przycisk przy ogłoszeniu, wypełniając atrybuty danymi ogłoszenia. Kliknięcie otwiera SafeDeal z gotowym formularzem
-          oferty (tytuł, cena w USDC, opis, link do ogłoszenia) — sprzedawca sprawdza dane i wystawia ofertę jednym podpisem, bez SOL.
+          The marketplace adds the button next to a listing and fills its attributes with the listing data. Clicking it opens SafeDeal with a prefilled offer
+          form (title, price in USDC, description, link to the listing) — the seller checks the details and creates the offer with one signature, no SOL needed.
         </p>
         <Snippet
-          label="Przycisk"
-          code={`<script src="${origin}/widget.js" async></script>\n<a data-safedeal-sell\n   data-title="Rower gravel Kross Esker"\n   data-price="250"\n   data-description="Rama 54 cm, przebieg ok. 800 km"\n   data-url="https://twoj-serwis.pl/ogloszenie/123"></a>`}
+          label="Button"
+          code={`<script src="${origin}/widget.js" async></script>\n<a data-safedeal-sell\n   data-title="Kross Esker gravel bike"\n   data-price="250"\n   data-description="54 cm frame, approx. 800 km ridden"\n   data-url="https://your-marketplace.com/listing/123"></a>`}
         />
         <p className="small">
-          <a className="plink" href={`/?tytul=${encodeURIComponent("Rower gravel Kross Esker")}&cena=250&opis=${encodeURIComponent("Rama 54 cm, przebieg ok. 800 km")}&zrodlo=${encodeURIComponent("https://twoj-serwis.pl/ogloszenie/123")}#nowa-oferta`}>
-            Zobacz, jak to działa →
+          <a className="plink" href={`/?tytul=${encodeURIComponent("Kross Esker gravel bike")}&cena=250&opis=${encodeURIComponent("54 cm frame, approx. 800 km ridden")}&zrodlo=${encodeURIComponent("https://your-marketplace.com/listing/123")}#nowa-oferta`}>
+            See how it works →
           </a>
         </p>
       </section>

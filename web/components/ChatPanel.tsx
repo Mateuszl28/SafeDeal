@@ -21,7 +21,7 @@ function verifySignature(payload: string, signatureHex: string, from: string): b
   }
 }
 
-const TEMPLATES = ["Proszę o wysyłkę do paczkomatu: [kod paczkomatu]", "Paczka nadana, numer jest w transakcji.", "Dotarło, sprawdzam zawartość."];
+const TEMPLATES = ["Please ship to parcel locker: [locker code]", "Parcel shipped, the tracking number is in the deal.", "Arrived, checking the contents."];
 
 /**
  * Rozmowa stron. Każda wiadomość jest podpisana kluczem nadawcy i sprawdzana tutaj, w przeglądarce —
@@ -91,14 +91,14 @@ export function ChatPanel({ id, deal, isArbiter }: { id: string; deal: Deal; isA
 
   return (
     <section className="card wide chat">
-      <h2>Rozmowa</h2>
+      <h2>Chat</h2>
       <p className="muted small">
-        Każda wiadomość jest podpisana kluczem nadawcy (bez opłat, to nie jest transakcja) i sprawdzana w Twojej przeglądarce.
-        {isArbiter && !isParty && " Jako arbiter widzisz rozmowę jako materiał w sporze."}
+        Every message is signed with the sender's key (free — it's not a transaction) and verified in your browser.
+        {isArbiter && !isParty && " As an arbiter you see the chat as material in the dispute."}
       </p>
 
       {messages.length === 0 ? (
-        <p className="muted">Brak wiadomości. Ustalcie np. paczkomat odbioru.</p>
+        <p className="muted">No messages yet. Agree on e.g. the pickup parcel locker.</p>
       ) : (
         <ul className="messages">
           {messages.map((m) => {
@@ -107,11 +107,11 @@ export function ChatPanel({ id, deal, isArbiter }: { id: string; deal: Deal; isA
               <li key={m.signature} className={mine ? "mine" : ""}>
                 <div className="bubble">
                   <span className="who">
-                    {nameOf(m.from) ?? short(m.from)} · {new Date(m.ts).toLocaleString("pl-PL")}
+                    {nameOf(m.from) ?? short(m.from)} · {new Date(m.ts).toLocaleString("en-GB")}
                   </span>
                   <p>{m.text}</p>
                   <span className={`sig ${m.valid ? "ok" : "bad"}`}>
-                    {m.valid ? "✓ podpis zweryfikowany" : "✗ podpis nieprawidłowy — wiadomość mogła zostać podrobiona"}
+                    {m.valid ? "✓ signature verified" : "✗ invalid signature — the message may have been forged"}
                   </span>
                 </div>
               </li>
@@ -134,11 +134,11 @@ export function ChatPanel({ id, deal, isArbiter }: { id: string; deal: Deal; isA
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && send()}
-              placeholder="Napisz wiadomość…"
+              placeholder="Write a message…"
               maxLength={CHAT_MAX_LEN}
             />
             <button className="btn" disabled={sending || !text.trim()} onClick={send}>
-              {sending ? "Podpisuję…" : "Podpisz i wyślij"}
+              {sending ? "Signing…" : "Sign and send"}
             </button>
           </div>
           {err && <p className="err-text">{err}</p>}

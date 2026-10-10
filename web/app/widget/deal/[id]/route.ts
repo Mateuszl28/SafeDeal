@@ -14,8 +14,8 @@ const DARK = `:root { --bg:#0f141c; --text:#eef1f6; --muted:#9aa4b5; --border:rg
 function page(body: string, theme: string | null, id: string) {
   const darkCss = theme === "dark" ? DARK : theme === "light" ? "" : `@media (prefers-color-scheme: dark) { ${DARK} }`;
   return `<!doctype html>
-<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SafeDeal — bezpieczny zakup</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SafeDeal — safe purchase</title>
 <style>
 :root { --bg:#ffffff; --text:#111827; --muted:#5b6474; --border:#e3e6ec; --accent:#0a7d55; --accent-bg:#e8f7f0; --btn:#111827; --btn-text:#ffffff; }
 ${darkCss}
@@ -50,36 +50,36 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const headers = { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=15" };
   const d = serverDeployment();
   if (!d || !/^\d{1,18}$/.test(id)) {
-    return new Response(page(`<div class="card"><span class="muted">Nie ma takiej oferty SafeDeal.</span></div>`, theme, id), { status: 404, headers });
+    return new Response(page(`<div class="card"><span class="muted">No such SafeDeal offer.</span></div>`, theme, id), { status: 404, headers });
   }
   try {
     const program = readProgram(serverConnection(d), d);
     const deal = await fetchDeal(program, d, BigInt(id));
-    if (!deal) throw new Error("brak");
+    if (!deal) throw new Error("not found");
     const rep = await fetchProfile(program, d, deal.seller);
     const open = deal.state === State.Created && isZero(deal.buyer);
     const link = `${url.origin}/deal/${id}`;
     const w = d.windows;
     const body = `<div class="card">
-  <div class="top"><span class="brand">🔒 SafeDeal · bezpieczny zakup</span><span class="muted">#${esc(id)}</span></div>
+  <div class="top"><span class="brand">🔒 SafeDeal · safe purchase</span><span class="muted">#${esc(id)}</span></div>
   <div class="top"><h1>${esc(deal.title)}</h1><span class="price">${esc(fmtUsdc(deal.amount))}</span></div>
   ${
     open
-      ? `<div class="shield"><b>Pieniądze trzyma program, nie sprzedawca.</b> Wypłata dopiero po doręczeniu i oknie na reklamację.</div>
+      ? `<div class="shield"><b>The money is held by the program, not the seller.</b> Paid out only after delivery and the claim window.</div>
   <ul>
-    <li>${deal.pickupAllowed ? "Odbiór osobisty: płacisz z góry, a sprzedawca dostaje pieniądze dopiero po Twoim kodzie na spotkaniu" : `Paczka nie wyjdzie w ${esc(fmtDuration(w.ship))} → pieniądze wracają automatycznie`}</li>
-    <li>Spór rozstrzygają arbitrzy losowani z otwartej puli — nie platforma</li>
-    <li>Sprzedawca: ${esc(dealsDone(rep.soldOk + rep.boughtOk))}${rep.disputesLost ? `, przegrane spory: ${rep.disputesLost}` : ""}</li>
+    <li>${deal.pickupAllowed ? "In-person pickup: you pay upfront, and the seller gets the money only after you show your code at the meetup" : `Parcel not shipped within ${esc(fmtDuration(w.ship))} → the money comes back automatically`}</li>
+    <li>Disputes are decided by arbiters drawn from an open pool — not the platform</li>
+    <li>Seller: ${esc(dealsDone(rep.soldOk + rep.boughtOk))}${rep.disputesLost ? `, disputes lost: ${rep.disputesLost}` : ""}</li>
   </ul>
-  <a class="btn" href="${esc(link)}" target="_blank" rel="noopener">Kup bezpiecznie przez SafeDeal</a>
-  <span class="muted">Opłatę sieci płaci sponsor — nie potrzebujesz kryptowaluty na opłaty.</span>`
+  <a class="btn" href="${esc(link)}" target="_blank" rel="noopener">Buy safely with SafeDeal</a>
+  <span class="muted">Network fees are paid by a sponsor — you don't need crypto for fees.</span>`
       : `<div class="shield">Status: <b>${esc(STATE_LABEL[deal.state as State] ?? "—")}</b></div>
-  <a class="btn" href="${esc(link)}" target="_blank" rel="noopener">Zobacz transakcję w SafeDeal</a>`
+  <a class="btn" href="${esc(link)}" target="_blank" rel="noopener">View the deal on SafeDeal</a>`
   }
 </div>`;
     return new Response(page(body, theme, id), { headers });
   } catch {
-    return new Response(page(`<div class="card"><span class="muted">Nie udało się wczytać oferty #${esc(id)}.</span></div>`, theme, id), {
+    return new Response(page(`<div class="card"><span class="muted">Couldn't load offer #${esc(id)}.</span></div>`, theme, id), {
       status: 404,
       headers,
     });

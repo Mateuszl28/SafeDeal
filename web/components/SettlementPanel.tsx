@@ -24,48 +24,48 @@ export function SettlementPanel({ deal }: { id?: bigint; deal: Deal }) {
   const mine = offer && sameAddr(offer.proposer, w.address);
   const theirs = offer && !mine;
   const bondsNote =
-    s === State.InArbitration ? " Obie kaucje wracają." : s === State.Disputed ? " Kaucja kupującego wraca." : "";
+    s === State.InArbitration ? " Both bonds are returned." : s === State.Disputed ? " The buyer's bond is returned." : "";
 
   return (
     <section className="card wide settlement">
-      <h2>Ugoda</h2>
+      <h2>Settlement</h2>
       <p className="muted small">
-        Zamiast sporu możecie się dogadać: część kwoty wraca do kupującego, reszta trafia do sprzedawcy. Program wypłaca od
-        razu, gdy druga strona zaakceptuje.{bondsNote}
+        Instead of a dispute you can come to terms: part of the amount goes back to the buyer, the rest goes to the seller. The program pays out
+        immediately once the other party accepts.{bondsNote}
       </p>
 
       {theirs && (
         <div className="offer">
           <div>
-            <b>{nameOf(offer.proposer) ?? "Druga strona"}</b> proponuje: <b>{fmtUsdc(offer.buyerAmount)}</b> dla kupującego,{" "}
-            <b>{fmtUsdc(deal.amount - offer.buyerAmount)}</b> dla sprzedawcy.
+            <b>{nameOf(offer.proposer) ?? "The other party"}</b> proposes: <b>{fmtUsdc(offer.buyerAmount)}</b> to the buyer,{" "}
+            <b>{fmtUsdc(deal.amount - offer.buyerAmount)}</b> to the seller.
           </div>
           <button
             className="btn"
             disabled={!!w.busy}
-            onClick={() => w.write("acceptSettlement", [offer.buyerAmount], { deal, label: "Przyjęto ugodę" })}
+            onClick={() => w.write("acceptSettlement", [offer.buyerAmount], { deal, label: "Settlement accepted" })}
           >
-            Przyjmij ugodę
+            Accept settlement
           </button>
         </div>
       )}
       {mine && (
         <p className="muted">
-          Twoja propozycja: {fmtUsdc(offer.buyerAmount)} dla kupującego — czeka na drugą stronę. Możesz ją zmienić poniżej.
+          Your proposal: {fmtUsdc(offer.buyerAmount)} to the buyer — waiting for the other party. You can change it below.
         </p>
       )}
 
       <div className="settle-form">
         <label className="grow">
-          Zwrot dla kupującego: <b>{percent}%</b> = {fmtUsdc(proposed)} · sprzedawca: {fmtUsdc(deal.amount - proposed)}
+          Refund to the buyer: <b>{percent}%</b> = {fmtUsdc(proposed)} · seller: {fmtUsdc(deal.amount - proposed)}
           <input type="range" min={0} max={100} step={5} value={percent} onChange={(e) => setPercent(Number(e.target.value))} />
         </label>
         <button
           className="btn ghost"
           disabled={!!w.busy}
-          onClick={() => w.write("proposeSettlement", [proposed], { deal, label: "Zaproponowano ugodę" })}
+          onClick={() => w.write("proposeSettlement", [proposed], { deal, label: "Settlement proposed" })}
         >
-          {offer ? "Zaproponuj inny podział" : "Zaproponuj podział"}
+          {offer ? "Propose a different split" : "Propose a split"}
         </button>
       </div>
     </section>

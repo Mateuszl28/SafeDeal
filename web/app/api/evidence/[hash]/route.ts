@@ -4,11 +4,11 @@ import { STORE, TYPE_BY_EXT } from "@/lib/evidenceStore";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ hash: string }> }) {
   const { hash } = await params;
-  if (!/^[0-9a-f]{64}$/.test(hash)) return new Response("Zły hash", { status: 400 });
+  if (!/^[0-9a-f]{64}$/.test(hash)) return new Response("Bad hash", { status: 400 });
 
   const files = await readdir(STORE).catch(() => [] as string[]);
   const name = files.find((f) => f.startsWith(`${hash}.`));
-  if (!name) return new Response("Nie znaleziono", { status: 404 });
+  if (!name) return new Response("Not found", { status: 404 });
 
   const ext = name.split(".").pop()!;
   const body = await readFile(path.join(STORE, name));

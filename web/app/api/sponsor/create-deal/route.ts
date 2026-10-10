@@ -16,7 +16,7 @@ type Body = {
 export async function POST(req: Request) {
   const d = serverDeployment();
   const sponsor = sponsorKey();
-  if (!d || d.cluster !== "devnet" || !sponsor) return Response.json({ message: "Sponsor opłat niedostępny." }, { status: 503 });
+  if (!d || d.cluster !== "devnet" || !sponsor) return Response.json({ message: "Fee sponsor unavailable." }, { status: 503 });
 
   let seller: PublicKey;
   let args: NonNullable<Body["args"]>;
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     if (!body.args || !/^\d{1,20}$/.test(body.args.amount) || !body.args.title) throw new Error();
     args = body.args;
   } catch {
-    return Response.json({ message: "Nieprawidłowe dane oferty." }, { status: 400 });
+    return Response.json({ message: "Invalid offer data." }, { status: 400 });
   }
 
   try {

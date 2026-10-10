@@ -19,7 +19,7 @@ type Ctx = {
 const NotificationsContext = createContext<Ctx | null>(null);
 export const useNotifications = () => {
   const ctx = useContext(NotificationsContext);
-  if (!ctx) throw new Error("useNotifications poza NotificationsProvider");
+  if (!ctx) throw new Error("useNotifications outside NotificationsProvider");
   return ctx;
 };
 
@@ -119,30 +119,30 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         if (d.archived) continue;
         const before = prev[String(d.id)];
         const now = next[String(d.id)];
-        const t = `„${d.title}”`;
+        const t = `“${d.title}”`;
         const k = `${d.id}:${d.state}`;
         if (!before && d.state === State.Created) {
           // nowa oferta skierowana do konkretnej osoby
-          if (!isZero(d.buyer)) push(d.buyer, d.id, `${k}:new`, `${who(d.seller)} wystawia ofertę dla Ciebie: ${t} za ${fmtUsdc(d.amount)}`);
+          if (!isZero(d.buyer)) push(d.buyer, d.id, `${k}:new`, `${who(d.seller)} made you an offer: ${t} for ${fmtUsdc(d.amount)}`);
           continue;
         }
         if (!before || before.state !== now.state) {
           switch (d.state as State) {
             case State.Funded:
-              push(d.seller, d.id, k, `${who(d.buyer)}: wpłata ${fmtUsdc(d.amount)} za ${t} — nadaj paczkę`);
+              push(d.seller, d.id, k, `${who(d.buyer)} paid ${fmtUsdc(d.amount)} for ${t} — ship the parcel`);
               break;
             case State.Shipped:
-              push(d.buyer, d.id, k, `${t} nadana${d.tracking ? ` (${d.tracking})` : ""}`);
+              push(d.buyer, d.id, k, `${t} shipped${d.tracking ? ` (${d.tracking})` : ""}`);
               break;
             case State.Delivered:
-              push(d.buyer, d.id, k, `${t} doręczona — sprawdź paczkę, trwa okno reklamacji`);
-              push(d.seller, d.id, k, `${t} doręczona — wypłata po oknie reklamacji`);
+              push(d.buyer, d.id, k, `${t} delivered — check the parcel, the complaint window is open`);
+              push(d.seller, d.id, k, `${t} delivered — payout after the complaint window`);
               break;
             case State.Disputed:
-              push(d.seller, d.id, k, `Reklamacja do ${t}: „${d.disputeReason}”`);
+              push(d.seller, d.id, k, `Complaint about ${t}: “${d.disputeReason}”`);
               break;
             case State.InArbitration:
-              push(d.buyer, d.id, k, `Reklamacja do ${t} odrzucona — program losuje arbitrów`);
+              push(d.buyer, d.id, k, `Complaint about ${t} rejected — the program is drawing arbiters`);
               break;
             default:
               if (isFinal(d.state)) {
@@ -158,14 +158,14 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
             other,
             d.id,
             `${d.id}:offer:${now.offer}:${now.proposer}`,
-            `${who(now.proposer)} proponuje ugodę w ${t}: ${fmtUsdc(d.settlementBuyerAmount)} dla kupującego`,
+            `${who(now.proposer)} proposes a settlement for ${t}: ${fmtUsdc(d.settlementBuyerAmount)} to the buyer`,
           );
         }
         if (before && !before.drawn && now.drawn) {
-          for (const arb of d.panel) push(arb, d.id, `${d.id}:panel`, `Wylosowano Cię do sprawy ${t} — oddaj niejawny głos`);
+          for (const arb of d.panel) push(arb, d.id, `${d.id}:panel`, `You've been drawn as an arbiter for ${t} — cast your sealed vote`);
         }
-        if (before && !before.rb && now.rb) push(d.seller, d.id, `${d.id}:review:b`, `${who(d.buyer)} wystawia Ci opinię za ${t}`);
-        if (before && !before.rs && now.rs) push(d.buyer, d.id, `${d.id}:review:s`, `${who(d.seller)} wystawia Ci opinię za ${t}`);
+        if (before && !before.rb && now.rb) push(d.seller, d.id, `${d.id}:review:b`, `${who(d.buyer)} left you a review for ${t}`);
+        if (before && !before.rs && now.rs) push(d.buyer, d.id, `${d.id}:review:s`, `${who(d.seller)} left you a review for ${t}`);
       }
 
       if (!Object.keys(fresh).length) return persist(boxesRef.current);
@@ -232,7 +232,7 @@ export function NotificationBell() {
     <div className="bell-wrap">
       <button
         className="btn ghost sm bell"
-        aria-label={`Powiadomienia (${count} nowych)`}
+        aria-label={`Notifications (${count} new)`}
         onClick={() => {
           setOpen((o) => !o);
           n.markRead(w.address);
@@ -243,7 +243,7 @@ export function NotificationBell() {
       {open && (
         <div className="bell-panel" onClick={() => setOpen(false)}>
           {items.length === 0 ? (
-            <p className="muted small">Brak powiadomień. Pojawią się tu zmiany w Twoich transakcjach.</p>
+            <p className="muted small">No notifications. Changes to your deals will show up here.</p>
           ) : (
             items.map((it) => (
               <Link key={it.key} href={`/deal/${it.id}`} className={it.read ? "" : "unread"}>

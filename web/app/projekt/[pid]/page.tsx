@@ -21,11 +21,11 @@ export default function ProjectPage() {
     .sort((a, b) => a.st!.index - b.st!.index);
 
   if (!w.deployment) return null;
-  if (stages.length === 0) return <p className="muted">Wczytuję zlecenie… (jeśli to trwa, sprawdź link)</p>;
+  if (stages.length === 0) return <p className="muted">Loading project… (if this takes long, check the link)</p>;
 
   const rows = stages.map((x) => x.d);
   const first = rows[0];
-  const name = first.title.replace(/ — etap \d+\/\d+:.*$/, "");
+  const name = first.title.replace(/ — (?:etap|stage|milestone) \d+\/\d+:.*$/, "");
   const total = rows.reduce((s, d) => s + d.amount, 0n);
   const paidOut = rows.filter((d) => d.state === State.Released || d.state === State.Settled).reduce((s, d) => s + d.amount, 0n);
   const unfunded = rows.filter((d) => d.state === State.Created);
@@ -36,7 +36,7 @@ export default function ProjectPage() {
 
   async function fundAll() {
     for (const d of unfunded) {
-      const ok = await w.write("fund", [], { deal: d, label: `Blokuję środki: ${d.title.split(": ").pop()}` });
+      const ok = await w.write("fund", [], { deal: d, label: `Locking funds: ${d.title.split(": ").pop()}` });
       if (!ok) break;
     }
   }
@@ -44,32 +44,32 @@ export default function ProjectPage() {
   return (
     <div className="grid">
       <section className="card wide">
-        <span className="mono muted small">Zlecenie w etapach</span>
+        <span className="mono muted small">Milestone project</span>
         <h1>{name}</h1>
         <p>
-          Wykonawca: <b>{nameOf(first.seller) ?? short(first.seller)}</b> · Klient: <b>{nameOf(first.buyer) ?? short(first.buyer)}</b> ·{" "}
-          {plural(rows.length, "etap", "etapy", "etapów")} · razem <b>{fmtUsdc(total)}</b> <Pln usdc={total} />
+          Contractor: <b>{nameOf(first.seller) ?? short(first.seller)}</b> · Client: <b>{nameOf(first.buyer) ?? short(first.buyer)}</b> ·{" "}
+          {plural(rows.length, "milestone", "milestones", "milestones")} · total <b>{fmtUsdc(total)}</b> <Pln usdc={total} />
         </p>
-        <div className="progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Wypłacono wykonawcy">
+        <div className="progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Paid out to contractor">
           <span style={{ width: `${pct}%` }} />
         </div>
         <p className="muted small">
-          Wypłacono wykonawcy {fmtUsdc(paidOut)} z {fmtUsdc(total)} · zamknięte etapy: {doneCount}/{rows.length}
+          Paid out to contractor: {fmtUsdc(paidOut)} of {fmtUsdc(total)} · completed milestones: {doneCount}/{rows.length}
         </p>
         {isClient && unfunded.length > 0 && (
           <button className="btn" disabled={!!w.busy} onClick={fundAll}>
-            Zablokuj {fmtUsdc(unfundedSum)} na {plural(unfunded.length, "nieopłacony etap", "nieopłacone etapy", "nieopłaconych etapów")}
+            Lock {fmtUsdc(unfundedSum)} for {plural(unfunded.length, "unfunded milestone", "unfunded milestones", "unfunded milestones")}
           </button>
         )}
         <p className="muted small">
-          Każdy etap to osobna chroniona transakcja: wykonawca oddaje etap z linkiem do efektu pracy, klient akceptuje — albo wypłata
-          następuje automatycznie po terminie. Przy niezgodzie działa reklamacja, ugoda i arbitraż jak przy zakupach.
+          Each milestone is a separate protected deal: the contractor delivers the milestone with a link to the work and the client accepts it — or
+          the payout happens automatically after the deadline. If they disagree, complaints, settlement and arbitration work just like for purchases.
         </p>
       </section>
-      <DealList title="Etapy" rows={rows} empty="Brak etapów." />
+      <DealList title="Milestones" rows={rows} empty="No milestones." />
       <p className="muted small">
         <Link href="/" className="plink">
-          ← Wróć do ofert
+          ← Back to offers
         </Link>
       </p>
     </div>

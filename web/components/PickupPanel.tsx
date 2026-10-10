@@ -71,10 +71,10 @@ export function PickupPanel({ id, deal, canBuy }: { id: bigint; deal: Deal; canB
   if (s === State.Created && allowed && canBuy) {
     return (
       <section className="card wide pickup">
-        <h2>Odbiór osobisty</h2>
+        <h2>In-person pickup</h2>
         <p className="muted small">
-          Płacisz do sejfu programu i dostajesz tajny kod. Na spotkaniu oglądasz przedmiot i dopiero wtedy pokazujesz kod — sprzedawca
-          wpisuje go i dostaje pieniądze. Jeśli do spotkania nie dojdzie, pieniądze wrócą do Ciebie po terminie.
+          You pay into the program's vault and get a secret code. At the meetup you inspect the item and only then show the code — the seller
+          enters it and gets paid. If the meetup doesn't happen, the money comes back to you after the deadline.
         </p>
         <button
           className="btn"
@@ -87,10 +87,10 @@ export function PickupPanel({ id, deal, canBuy }: { id: bigint; deal: Deal; canB
               /* bez storage kod zniknie po odświeżeniu — kupujący zobaczy go jeszcze teraz */
             }
             setCode(fresh);
-            await w.write("fund", [await pickupHash(id, normalizeCode(fresh))], { deal, label: "Wpłacono z odbiorem osobistym" });
+            await w.write("fund", [await pickupHash(id, normalizeCode(fresh))], { deal, label: "Paid with in-person pickup" });
           }}
         >
-          Kup z odbiorem osobistym — zablokuj {fmtUsdc(deal.amount)}
+          Buy with in-person pickup — lock {fmtUsdc(deal.amount)}
         </button>
       </section>
     );
@@ -103,15 +103,15 @@ export function PickupPanel({ id, deal, canBuy }: { id: bigint; deal: Deal; canB
     const seller = PERSONAS.find((p) => sameAddr(p.address, deal.seller));
     return (
       <section className="card wide pickup">
-        <h2>Twój kod odbioru</h2>
-        <p className="warn-text">Pokaż go dopiero, gdy obejrzysz przedmiot. Kod = zgoda na wypłatę dla sprzedawcy.</p>
+        <h2>Your pickup code</h2>
+        <p className="warn-text">Show it only after you've inspected the item. The code = consent to pay the seller.</p>
         {code ? (
           <div className="pickup-code">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {qr && <img src={qr} alt="Kod QR do zeskanowania przez sprzedawcę" width={180} height={180} />}
+            {qr && <img src={qr} alt="QR code for the seller to scan" width={180} height={180} />}
             <div>
               <p className="mono code-text">{code}</p>
-              <p className="muted small">Sprzedawca skanuje QR albo przepisuje kod. W blockchainie jest tylko jego odcisk (hash).</p>
+              <p className="muted small">The seller scans the QR or types the code. Only its fingerprint (hash) is on the blockchain.</p>
               {w.mode === "demo" && seller && (
                 <button
                   className="btn ghost sm"
@@ -121,13 +121,13 @@ export function PickupPanel({ id, deal, canBuy }: { id: bigint; deal: Deal; canB
                     setTyped(code);
                   }}
                 >
-                  Demo: zeskanuj kod jako {seller.name}
+                  Demo: scan the code as {seller.name}
                 </button>
               )}
             </div>
           </div>
         ) : (
-          <p className="err-text">Kod jest zapisany tylko w przeglądarce, w której kupowałeś — otwórz transakcję tam.</p>
+          <p className="err-text">The code is stored only in the browser you bought with — open the deal there.</p>
         )}
       </section>
     );
@@ -137,27 +137,27 @@ export function PickupPanel({ id, deal, canBuy }: { id: bigint; deal: Deal; canB
   if (isSeller) {
     return (
       <section className="card wide pickup">
-        <h2>Odbiór osobisty — kod od kupującego</h2>
-        <p className="muted small">Kupujący pokaże kod po obejrzeniu przedmiotu. Wydaj przedmiot dopiero, gdy kod jest prawidłowy.</p>
+        <h2>In-person pickup — code from the buyer</h2>
+        <p className="muted small">The buyer will show the code after inspecting the item. Hand over the item only once the code is valid.</p>
         <div className="inline">
           <input
             className="mono"
             value={typed}
             onChange={(e) => setTyped(normalizeCode(e.target.value))}
             placeholder="XXXX-XXXX-XXXX-XXXX"
-            aria-label="Kod odbioru"
+            aria-label="Pickup code"
           />
           <button
             className="btn"
             disabled={!valid || !!w.busy}
-            onClick={async () => w.write("confirmPickup", [await codeBytes(normalized)], { deal, label: "Potwierdzono odbiór osobisty" })}
+            onClick={async () => w.write("confirmPickup", [await codeBytes(normalized)], { deal, label: "In-person pickup confirmed" })}
           >
-            Wydaję przedmiot — odbierz {fmtUsdc(deal.amount)}
+            Hand over the item — collect {fmtUsdc(deal.amount)}
           </button>
         </div>
         {complete && (
           <p className={valid ? "ok-text" : "err-text"}>
-            {valid ? "✓ Kod prawidłowy — możesz wydać przedmiot." : "✗ Kod nieprawidłowy — nie wydawaj przedmiotu."}
+            {valid ? "✓ Valid code — you can hand over the item." : "✗ Invalid code — don't hand over the item."}
           </p>
         )}
       </section>

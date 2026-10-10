@@ -34,18 +34,18 @@ function ReviewItem({ r, showDeal }: { r: Review; showDeal?: boolean }) {
       <div className="review-head">
         <Stars value={r.stars} />
         <span className="muted small">
-          {who(r.author)} o {who(r.subject)}
+          {who(r.author)} on {who(r.subject)}
           {showDeal && (
             <>
               {" · "}
               <Link href={`/deal/${r.id}`} className="plink">
-                transakcja #{String(r.id)}
+                deal #{String(r.id)}
               </Link>
             </>
           )}
         </span>
       </div>
-      {r.comment && <p>„{r.comment}”</p>}
+      {r.comment && <p>“{r.comment}”</p>}
     </li>
   );
 }
@@ -67,10 +67,10 @@ export function ReviewPanel({ id, deal }: { id: bigint; deal: Deal }) {
 
   return (
     <section className="card wide">
-      <h2>Opinie</h2>
+      <h2>Reviews</h2>
       <p className="muted small">
-        Opinię może wystawić tylko strona tej transakcji, raz i dopiero po jej zamknięciu. Zapisana w publicznym rejestrze — nie da się
-        jej kupić, usunąć ani zmienić.
+        Only a party to this deal can leave a review, once, and only after the deal is closed. It's stored in a public ledger — it can't be
+        bought, deleted or changed.
       </p>
       {reviews.length > 0 && (
         <ul className="reviews">
@@ -82,15 +82,15 @@ export function ReviewPanel({ id, deal }: { id: bigint; deal: Deal }) {
       {canReview && (
         <div className="review-form">
           <span>
-            Twoja ocena dla <b>{who(other)}</b>:
+            Your rating for <b>{who(other)}</b>:
           </span>
-          <div className="star-pick" role="radiogroup" aria-label="Ocena">
+          <div className="star-pick" role="radiogroup" aria-label="Rating">
             {[1, 2, 3, 4, 5].map((n) => (
               <button
                 key={n}
                 role="radio"
                 aria-checked={stars === n}
-                aria-label={`${n} na 5`}
+                aria-label={`${n} out of 5`}
                 className={n <= stars ? "on" : ""}
                 onClick={() => setStars(n)}
               >
@@ -98,9 +98,9 @@ export function ReviewPanel({ id, deal }: { id: bigint; deal: Deal }) {
               </button>
             ))}
           </div>
-          <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Krótki komentarz (opcjonalnie)" maxLength={280} />
-          <button className="btn" disabled={!!w.busy} onClick={() => w.write("review", [stars, comment.trim()], { deal, label: "Zapisuję opinię" })}>
-            Wystaw opinię
+          <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Short comment (optional)" maxLength={280} />
+          <button className="btn" disabled={!!w.busy} onClick={() => w.write("review", [stars, comment.trim()], { deal, label: "Saving review" })}>
+            Leave a review
           </button>
         </div>
       )}
@@ -118,15 +118,15 @@ export function ProfileReviews({ address }: { address: Address }) {
 
   return (
     <section className="card wide">
-      <h2>Opinie</h2>
+      <h2>Reviews</h2>
       {!rating || rating.count === 0 ? (
-        <p className="muted">Brak opinii — żadna zamknięta transakcja nie została jeszcze oceniona.</p>
+        <p className="muted">No reviews — no closed deal has been rated yet.</p>
       ) : (
         <>
           <p className="rating-big">
             <Stars value={rating.avg} size="1.4rem" /> <b>{rating.avg.toFixed(1)}</b>{" "}
             <span className="muted">
-              · {plural(rating.count, "opinia", "opinie", "opinii")} z transakcji o łącznej wartości {fmtUsdc(rating.volume)}
+              · {plural(rating.count, "review", "reviews", "reviews")} from deals worth {fmtUsdc(rating.volume)} in total
             </span>
           </p>
           <ul className="reviews">
@@ -143,11 +143,11 @@ export function ProfileReviews({ address }: { address: Address }) {
 /** Kompaktowo, np. w karcie „Od kogo kupujesz”. */
 export function RatingInline({ address }: { address: Address }) {
   const rating = useRating(address);
-  if (!rating || rating.count === 0) return <span className="muted"> · brak opinii</span>;
+  if (!rating || rating.count === 0) return <span className="muted"> · no reviews</span>;
   return (
     <span>
       {" · "}
-      <Stars value={rating.avg} /> {rating.avg.toFixed(1)} ({plural(rating.count, "opinia", "opinie", "opinii")})
+      <Stars value={rating.avg} /> {rating.avg.toFixed(1)} ({plural(rating.count, "review", "reviews", "reviews")})
     </span>
   );
 }

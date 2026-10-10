@@ -11,12 +11,12 @@ const display = Space_Grotesk({ subsets: ["latin", "latin-ext"], variable: "--fo
 
 export const metadata: Metadata = {
   title: "SafeDeal",
-  description: "Kupuj od obcych bez ryzyka — escrow na blockchainie z oracle doręczeń i arbitrażem.",
+  description: "Buy from strangers without risk — blockchain escrow with delivery oracles and arbitration.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pl" className={`${sans.variable} ${display.variable}`}>
+    <html lang="en" className={`${sans.variable} ${display.variable}`}>
       <body>
         <WalletProvider>
           <NotificationsProvider>
@@ -25,8 +25,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <main>{children}</main>
             <DemoGuide />
             <footer className="muted">
-              <span className="footer-brand">◆ SafeDeal</span> Pieniądze trzyma kod, nie pośrednik. Każdy stan ma deadline — nikt nie zamrozi
-              środków, znikając. <span className="footer-chain">Zbudowane na Solanie</span>
+              <span className="footer-brand">◆ SafeDeal</span> The money is held by code, not a middleman. Every state has a deadline — nobody can freeze
+              funds by disappearing. <span className="footer-chain">Built on Solana</span>
             </footer>
           </div>
           </NotificationsProvider>

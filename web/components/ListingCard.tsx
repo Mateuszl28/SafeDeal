@@ -10,7 +10,7 @@ function Photo({ uri, hash }: { uri: string; hash: string }) {
     <div>
       <a href={uri} target="_blank" rel="noreferrer">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={uri} alt="Zdjęcie przedmiotu z oferty" />
+        <img src={uri} alt="Photo of the item from the offer" />
       </a>
       <span className={`verify ${check}`}>{CHECK_LABEL[check]}</span>
     </div>
@@ -27,12 +27,12 @@ export function ListingCard({ deal }: { id?: bigint; deal: Deal }) {
       <div className={deal.photoUri ? "listing" : ""}>
         {deal.photoUri && <Photo uri={deal.photoUri} hash={deal.photoHash} />}
         <div>
-          <h2>{parseStage(deal.description) ? "Opis etapu" : "Opis sprzedawcy"}</h2>
+          <h2>{parseStage(deal.description) ? "Stage description" : "Seller's description"}</h2>
           {deal.description && <p className="desc">{visibleDescription(deal.description)}</p>}
           <p className="muted small">
             {frozen
-              ? "Opis i odcisk zdjęcia zostały zapisane w blockchainie przed wpłatą — to dowód w razie reklamacji „niezgodne z opisem”."
-              : "Zapisane w blockchainie. Opis i zdjęcie są częścią oferty — sprzedawca nie może ich podmienić."}
+              ? "The description and photo fingerprint were stored on the blockchain before payment — proof in case of a “not as described” complaint."
+              : "Stored on the blockchain. The description and photo are part of the offer — the seller can't swap them."}
           </p>
         </div>
       </div>

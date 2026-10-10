@@ -27,19 +27,19 @@ export function Header() {
           <Link href="/" className="brand">
             <span className="brand-mark">◆</span> SafeDeal
           </Link>
-          <Link href="/">Oferty</Link>
-          <Link href="/arbitrzy">Arbitrzy</Link>
-          <Link href="/wtyczka">Wtyczka</Link>
-          <Link href="/stats">Statystyki</Link>
-          <Link href="/jury">Dla jury</Link>
-          {w.address && <Link href={`/u/${w.address}`}>Mój profil</Link>}
+          <Link href="/">Offers</Link>
+          <Link href="/arbitrzy">Arbiters</Link>
+          <Link href="/wtyczka">Widget</Link>
+          <Link href="/stats">Stats</Link>
+          <Link href="/jury">For the jury</Link>
+          {w.address && <Link href={`/u/${w.address}`}>My profile</Link>}
         </div>
         <div className="seg">
           <button className={w.mode === "demo" ? "on" : ""} onClick={() => w.setMode("demo")} disabled={PERSONAS.length === 0}>
-            Demo (persony)
+            Demo (personas)
           </button>
           <button className={w.mode === "wallet" ? "on" : ""} onClick={() => w.setMode("wallet")}>
-            Portfel · Solana {cluster}
+            Wallet · Solana {cluster}
           </button>
         </div>
       </div>
@@ -47,7 +47,7 @@ export function Header() {
       <div className="header-row">
         {w.mode === "demo" ? (
           <div className="personas">
-            <span className="muted">Jesteś:</span>
+            <span className="muted">You are:</span>
             {PERSONAS.map((p) => (
               <button
                 key={p.address}
@@ -66,26 +66,26 @@ export function Header() {
               {short(w.address)} ↗
             </a>
             <button className="btn ghost sm" onClick={() => w.disconnect()}>
-              Rozłącz
+              Disconnect
             </button>
           </div>
         ) : (
           <button className="btn" onClick={() => w.connect()}>
-            Połącz portfel
+            Connect wallet
           </button>
         )}
 
         {w.deployment && w.address && (
           <div className="balance">
             <NotificationBell />
-            <span className="mono" title="Testowe USDC (devnet)">
+            <span className="mono" title="Test USDC (devnet)">
               {balance === undefined ? "…" : fmtUsdc(balance)}
             </span>
-            <span className="mono muted" title="SOL na opłaty sieci">
-              {w.solBalance === undefined ? "…" : `${w.solBalance.toLocaleString("pl-PL", { maximumFractionDigits: 3 })} SOL`}
+            <span className="mono muted" title="SOL for network fees">
+              {w.solBalance === undefined ? "…" : `${w.solBalance.toLocaleString("en-GB", { maximumFractionDigits: 3 })} SOL`}
             </span>
             <button className="btn ghost sm" onClick={() => w.faucet()} disabled={!!w.busy}>
-              + 1000 USDC z kranu
+              + 1000 USDC from faucet
             </button>
             <button className="btn ghost sm" onClick={() => w.airdrop()} disabled={!!w.busy}>
               + SOL
@@ -97,20 +97,20 @@ export function Header() {
       {w.mode === "wallet" && w.address && w.solBalance !== undefined && w.solBalance < 0.01 && (
         <div className="notice onboard">
           <span>
-            <b>Nowy portfel?</b> Każda operacja kosztuje ułamek grosza opłaty sieci (testowy SOL). Przygotujemy go za Ciebie:
-            sponsor wyśle odrobinę testowego SOL, a kran programu — 1000 testowych USDC. Sponsor płaci tylko opłaty i nie ma
-            żadnego dostępu do pieniędzy w sejfach.
+            <b>New wallet?</b> Every operation costs a fraction of a cent in network fees (test SOL). We'll set it up for you:
+            a sponsor sends a little test SOL and the program faucet sends 1000 test USDC. The sponsor only pays fees and has
+            no access to the money in the vaults.
           </span>
           <button className="btn" onClick={() => w.prepareWallet()} disabled={!!w.busy}>
-            Przygotuj portfel do testu
+            Prepare wallet for testing
           </button>
         </div>
       )}
 
       {!w.deployment && (
         <div className="notice">
-          Brak wdrożonego programu SafeDeal dla sieci Solana. Uruchom konfigurację devnetu: <code>cd solana &amp;&amp; npm run setup:devnet</code>
-          , potem odśwież stronę.
+          No SafeDeal program deployed for this Solana network. Run the devnet setup: <code>cd solana &amp;&amp; npm run setup:devnet</code>
+          , then refresh the page.
         </div>
       )}
       {w.busy && (
@@ -120,7 +120,7 @@ export function Header() {
       )}
       {!w.busy && w.error && (
         <div className="toast err" role="alert" onClick={w.clearError}>
-          {w.error} <small>(kliknij, aby zamknąć)</small>
+          {w.error} <small>(click to dismiss)</small>
         </div>
       )}
       {!w.busy && !w.error && w.lastTx && (
@@ -128,10 +128,10 @@ export function Header() {
           <span>
             ✓ {w.lastTx.label} —{" "}
             <a href={explorerTx(w.lastTx.signature, cluster)} target="_blank" rel="noreferrer">
-              zobacz w Solana Explorer ↗
+              view in Solana Explorer ↗
             </a>
           </span>
-          <button className="toast-x" onClick={w.clearLastTx} aria-label="Zamknij">
+          <button className="toast-x" onClick={w.clearLastTx} aria-label="Close">
             ×
           </button>
         </div>

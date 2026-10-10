@@ -11,10 +11,10 @@ import { parseStage } from "@/lib/project";
 
 /** Przy etapach zlecenia te same stany znaczą co innego niż przy paczkach. */
 const STAGE_LABEL: Partial<Record<number, string>> = {
-  1: "Czeka na opłacenie",
-  2: "Opłacony — w realizacji",
-  3: "Oddany — czeka na akceptację",
-  7: "Zaakceptowany — wypłacono",
+  1: "Awaiting payment",
+  2: "Funded — in progress",
+  3: "Delivered — awaiting approval",
+  7: "Accepted — paid out",
 };
 
 /** Opis i zdjęcie oferty są teraz polami konta transakcji — wiersz listy to po prostu `Deal`. */
@@ -61,7 +61,7 @@ export function DealList({ title, rows, empty }: { title: string; rows: Row[]; e
                 )}
                 <span className="grow">{d.title}</span>
                 <span className="muted">
-                  {nameOf(d.seller) ?? "sprzedawca"} → {isZero(d.buyer) ? "?" : (nameOf(d.buyer) ?? "kupujący")}
+                  {nameOf(d.seller) ?? "seller"} → {isZero(d.buyer) ? "?" : (nameOf(d.buyer) ?? "buyer")}
                 </span>
                 <span className="mono">
                   {fmtUsdc(d.amount)} <Pln usdc={d.amount} />

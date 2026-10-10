@@ -11,9 +11,9 @@ export async function GET() {
     if (!res.ok) throw new Error(`NBP ${res.status}`);
     const json = (await res.json()) as { rates: { mid: number; effectiveDate: string }[] };
     const rate = json.rates?.[0];
-    if (!rate?.mid) throw new Error("brak kursu");
+    if (!rate?.mid) throw new Error("no rate");
     return NextResponse.json({ mid: rate.mid, date: rate.effectiveDate });
   } catch {
-    return NextResponse.json({ error: "Kurs NBP niedostępny" }, { status: 503 });
+    return NextResponse.json({ error: "NBP rate unavailable" }, { status: 503 });
   }
 }

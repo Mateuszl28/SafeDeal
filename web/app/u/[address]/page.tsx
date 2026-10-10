@@ -13,7 +13,7 @@ export default function ProfilePage() {
   const w = useWallet();
   const deals = useAllDeals();
 
-  if (!isAddress(address)) return <p>Nieprawidłowy adres.</p>;
+  if (!isAddress(address)) return <p>Invalid address.</p>;
   if (!w.deployment) return null;
   const addr = address as Address;
 
@@ -21,8 +21,8 @@ export default function ProfilePage() {
     <div className="grid">
       <ProfileSummary address={addr} deals={deals} />
       <ProfileReviews address={addr} />
-      <DealList title="Sprzedaje" rows={deals.filter((d) => sameAddr(d.seller, addr))} empty="Brak sprzedaży." />
-      <DealList title="Kupuje" rows={deals.filter((d) => sameAddr(d.buyer, addr))} empty="Brak zakupów." />
+      <DealList title="Selling" rows={deals.filter((d) => sameAddr(d.seller, addr))} empty="No sales." />
+      <DealList title="Buying" rows={deals.filter((d) => sameAddr(d.buyer, addr))} empty="No purchases." />
     </div>
   );
 }

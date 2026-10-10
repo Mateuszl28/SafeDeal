@@ -20,7 +20,7 @@ export function BuyerGuarantee({ deal, rep, pickup }: { deal: Deal; rep?: Profil
 
   return (
     <section className="card wide trust-card">
-      <h2>Od kogo kupujesz</h2>
+      <h2>Who you're buying from</h2>
       <p>
         <Link href={`/u/${seller}`} className="plink">
           <b>{nameOf(seller) ?? short(seller)}</b>
@@ -28,31 +28,31 @@ export function BuyerGuarantee({ deal, rep, pickup }: { deal: Deal; rep?: Profil
         <RatingInline address={seller} />
         {" · "}
         {done === 0 ? (
-          <span className="muted">nowy użytkownik, bez historii — i dlatego płacisz przez sejf SafeDeal</span>
+          <span className="muted">new user with no history — which is exactly why you pay through the SafeDeal vault</span>
         ) : (
           <span>
             {dealsDone(done)}
-            {lost > 0 && <span className="err-text"> · {plural(lost, "przegrany spór", "przegrane spory", "przegranych sporów")}</span>}
+            {lost > 0 && <span className="err-text"> · {plural(lost, "dispute lost", "disputes lost", "disputes lost")}</span>}
           </span>
         )}
       </p>
-      <p className="muted small">Nie musisz ufać sprzedawcy. Te reguły wykonuje program na blockchainie, niezależnie od woli którejkolwiek strony:</p>
+      <p className="muted small">You don't have to trust the seller. These rules are enforced by a program on the blockchain, regardless of what either party wants:</p>
       <ul className="guarantees">
         <li>
-          Twoje {fmtUsdc(deal.amount)} (<Pln usdc={deal.amount} />) trafią do sejfu programu, nie do sprzedawcy — nie może ich ruszyć.
+          Your {fmtUsdc(deal.amount)} (<Pln usdc={deal.amount} />) goes into the program's vault, not to the seller — they can't touch it.
         </li>
-        <li>Jeśli sprzedawca nie nada paczki w ciągu {fmtDuration(d.windows.ship)}, pieniądze wrócą do Ciebie.</li>
+        <li>If the seller doesn't ship within {fmtDuration(d.windows.ship)}, the money comes back to you.</li>
         <li>
-          Wypłata nastąpi dopiero, gdy {d.oracleQuorum} z {d.oracles.length} niezależnych źródeł potwierdzą doręczenie i minie{" "}
-          {fmtDuration(d.windows.inspection)} na reklamację.
+          The payout happens only after {d.oracleQuorum} of {d.oracles.length} independent sources confirm delivery and the{" "}
+          {fmtDuration(d.windows.inspection)} complaint window has passed.
         </li>
         <li>
-          W razie problemu zgłosisz reklamację z kaucją {fmtUsdc(bond)} — wraca, jeśli masz rację. Możesz też zaproponować
-          częściowy zwrot.
+          If something's wrong, you file a complaint with a {fmtUsdc(bond)} bond — you get it back if you're right. You can also propose
+          a partial refund.
         </li>
         {pickup && (
           <li>
-            Możesz też wybrać odbiór osobisty: płacisz do sejfu, a kod odbioru pokazujesz dopiero po obejrzeniu przedmiotu.
+            You can also choose in-person pickup: you pay into the vault and show the pickup code only after inspecting the item.
           </li>
         )}
       </ul>

@@ -30,7 +30,7 @@ export function BlinkShare({ id, deal }: { id: string; deal: Deal }) {
     try {
       setCard((await (await fetch(endpoint)).json()) as ActionCard);
     } catch {
-      setCard({ icon: "", title: "Nie udało się pobrać karty", description: "", label: "", disabled: true });
+      setCard({ icon: "", title: "Couldn't load the card", description: "", label: "", disabled: true });
     }
   }
 
@@ -43,20 +43,20 @@ export function BlinkShare({ id, deal }: { id: string; deal: Deal }) {
           setCopied(true);
           setTimeout(() => setCopied(false), 1500);
         }}
-        title="Solana Action — karta zakupu do wklejenia w post lub czat"
+        title="Solana Action — a purchase card to paste into a post or chat"
       >
-        {copied ? "Skopiowano ✓" : "Kopiuj link Blink ⚡"}
+        {copied ? "Copied ✓" : "Copy Blink link ⚡"}
       </button>
       <button className="btn ghost sm" onClick={preview}>
-        Podgląd karty
+        Preview card
       </button>
 
       {open && (
-        <div className="blink-modal" role="dialog" aria-label="Podgląd karty Blink" onClick={() => setOpen(false)}>
+        <div className="blink-modal" role="dialog" aria-label="Blink card preview" onClick={() => setOpen(false)}>
           <div className="blink-frame" onClick={(e) => e.stopPropagation()}>
-            <p className="muted small">Tak wygląda oferta wklejona w post na X albo w czat (Solana Actions):</p>
+            <p className="muted small">This is how the offer looks when pasted into a post on X or a chat (Solana Actions):</p>
             {!card ? (
-              <p className="muted">Wczytuję kartę z endpointu Solana Actions…</p>
+              <p className="muted">Loading the card from the Solana Actions endpoint…</p>
             ) : (
               <div className="blink-card">
                 {card.icon && (
@@ -72,10 +72,10 @@ export function BlinkShare({ id, deal }: { id: string; deal: Deal }) {
                     className="btn"
                     disabled={card.disabled || !!w.busy}
                     onClick={async () => {
-                      if (await w.buySponsored(deal, "Kupiono przez Blink")) setOpen(false);
+                      if (await w.buySponsored(deal, "Bought via Blink")) setOpen(false);
                     }}
                   >
-                    {card.label || "Kup"}
+                    {card.label || "Buy"}
                   </button>
                 </div>
               </div>
@@ -87,13 +87,13 @@ export function BlinkShare({ id, deal }: { id: string; deal: Deal }) {
                   {" "}
                   ·{" "}
                   <a className="plink" href={dial} target="_blank" rel="noreferrer">
-                    otwórz w dial.to ↗
+                    open in dial.to ↗
                   </a>
                 </>
               )}
             </p>
             <button className="btn ghost sm" onClick={() => setOpen(false)}>
-              Zamknij
+              Close
             </button>
           </div>
         </div>

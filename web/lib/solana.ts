@@ -446,7 +446,7 @@ export async function buildInstructions(
     ];
   }
 
-  if (!deal) throw new Error("Brak transakcji");
+  if (!deal) throw new Error("Deal not found");
   const dealPda = pk(deal.pda);
   const vault = p.vault(dealPda);
 
@@ -598,7 +598,7 @@ export async function buildInstructions(
       return [...pre, await m.revealVote(forBuyer, bytes32(salt)).accountsPartial(payout).instruction()];
     }
   }
-  throw new Error(`Nieznana akcja ${name}`);
+  throw new Error(`Unknown action ${name}`);
 }
 
 // ───────────────────────────── hashe (zgodne z programem) ─────────────────────────────
@@ -650,7 +650,7 @@ export async function pickPanel(members: Address[], id: bigint, seed: Uint8Array
   const cand = members.filter((m) => m !== buyer && m !== seller);
   const out: Address[] = [];
   for (let j = 0; j < 3; j++) {
-    if (cand.length === 0) throw new Error("W puli jest za mało arbitrów, żeby wylosować skład.");
+    if (cand.length === 0) throw new Error("Not enough arbiters in the pool to draw a panel.");
     const h = await sha256(seed, u64le(id), new Uint8Array([j]));
     out.push(...cand.splice(Number(Buffer.from(h).readBigUInt64LE(0) % BigInt(cand.length)), 1));
   }

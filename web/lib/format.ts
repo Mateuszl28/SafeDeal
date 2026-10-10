@@ -7,11 +7,11 @@ const UNIT = 10n ** BigInt(USDC_DECIMALS);
 export const toUsdc = (v: bigint) => Number(v) / Number(UNIT);
 
 export const fmtUsdc = (v: bigint) =>
-  `${toUsdc(v).toLocaleString("pl-PL", { maximumFractionDigits: 2 })} USDC`;
+  `${toUsdc(v).toLocaleString("en-GB", { maximumFractionDigits: 2 })} USDC`;
 
 export function parseUsdc(s: string): bigint {
   const t = s.replace(",", ".").trim() || "0";
-  if (!/^\d*(\.\d*)?$/.test(t)) throw new Error("Nieprawidłowa kwota");
+  if (!/^\d*(\.\d*)?$/.test(t)) throw new Error("Invalid amount");
   const [whole, frac = ""] = t.split(".");
   return BigInt(whole || "0") * UNIT + BigInt((frac + "000000").slice(0, USDC_DECIMALS) || "0");
 }
@@ -41,10 +41,7 @@ export function fmtDuration(seconds: bigint | number): string {
 
 /** Polska odmiana: plural(1, "udana transakcja", "udane transakcje", "udanych transakcji"). */
 export function plural(n: number, one: string, few: string, many: string): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  const form = n === 1 ? one : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? few : many;
-  return `${n} ${form}`;
+  return `${n} ${n === 1 ? one : many}`;
 }
 
-export const dealsDone = (n: number) => plural(n, "udana transakcja", "udane transakcje", "udanych transakcji");
+export const dealsDone = (n: number) => plural(n, "successful deal", "successful deals", "successful deals");

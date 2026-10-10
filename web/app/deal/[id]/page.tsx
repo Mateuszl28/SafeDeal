@@ -85,8 +85,8 @@ export default function DealPage() {
   }, [vault, w.connection, w.refreshKey]);
 
   if (!w.deployment) return null;
-  if (deal === undefined) return <p className="muted">Wczytuję…</p>;
-  if (deal === null) return <p>Nie ma transakcji #{idParam}.</p>;
+  if (deal === undefined) return <p className="muted">Loading…</p>;
+  if (deal === null) return <p>Deal #{idParam} does not exist.</p>;
 
   const s = deal.state as State;
   const me = w.address;
@@ -109,10 +109,10 @@ export default function DealPage() {
     <div className="grid">
       <section className="card wide deal-head">
         <div>
-          <span className="mono muted">Transakcja #{idParam}</span>
+          <span className="mono muted">Deal #{idParam}</span>
           {stage && (
             <Link href={`/projekt/${stage.project}`} className="plink small stage-link">
-              Etap {stage.index}/{stage.total} zlecenia — zobacz wszystkie etapy →
+              Milestone {stage.index}/{stage.total} of the project — see all milestones →
             </Link>
           )}
           <h1>{deal.title}</h1>
@@ -123,11 +123,11 @@ export default function DealPage() {
         <div className="deal-side">
           <span className={`badge big s${s} ${isFinal(s) ? "final" : ""}`}>
             {isPickup && s === State.Funded
-              ? "Opłacona — czeka na spotkanie"
+              ? "Paid — waiting for the meetup"
               : stage && s === State.Funded
-                ? "Opłacony — czeka na oddanie etapu"
+                ? "Paid — waiting for the milestone"
                 : stage && s === State.Shipped
-                  ? "Oddany — czeka na akceptację"
+                  ? "Delivered — waiting for approval"
                   : STATE_LABEL[s]}
           </span>
           {s === State.Created && (
@@ -139,34 +139,34 @@ export default function DealPage() {
                 setTimeout(() => setCopied(false), 1500);
               }}
             >
-              {copied ? "Skopiowano ✓" : "Kopiuj link do ogłoszenia"}
+              {copied ? "Copied ✓" : "Copy listing link"}
             </button>
           )}
           {s === State.Created && <ShareQr id={idParam} />}
           {s === State.Created && !deal.pickupAllowed && <BlinkShare id={idParam} deal={deal} />}
           {s !== State.Created && (
             <Link href={`/deal/${idParam}/potwierdzenie`} className="btn ghost sm">
-              Potwierdzenie (PDF)
+              Receipt (PDF)
             </Link>
           )}
           <a href={explorerAddr(deal.pda, cluster)} target="_blank" rel="noreferrer" className="plink small">
-            Konto transakcji w Solana Explorer ↗
+            Deal account in Solana Explorer ↗
           </a>
         </div>
         {vault && (
           <div className="vault wide">
             <span>
-              🔒 <b>Pieniądze trzyma program, nie sprzedawca.</b>
+              🔒 <b>The money is held by the program, not the seller.</b>
             </span>
             <span>
-              Sejf tej transakcji:{" "}
+              This deal's vault:{" "}
               <a href={explorerAddr(vault, cluster)} target="_blank" rel="noreferrer" className="mono">
                 {short(vault)} ↗
               </a>{" "}
-              · teraz w środku: <b className="mono">{vaultBalance === undefined ? "…" : fmtUsdc(vaultBalance)}</b>
+              · currently inside: <b className="mono">{vaultBalance === undefined ? "…" : fmtUsdc(vaultBalance)}</b>
             </span>
             {s === State.Created && (
-              <small className="muted">Po wpłacie kupującego pieniądze trafią tutaj — wypłacić je mogą tylko reguły programu.</small>
+              <small className="muted">Once the buyer pays, the money lands here — only the program's rules can pay it out.</small>
             )}
           </div>
         )}
@@ -185,15 +185,15 @@ export default function DealPage() {
             {expired ? (
               <>
                 <span>
-                  Termin minął — teraz <b>{TIMEOUT_OUTCOME[s]}</b>. Rozliczyć może każdy.
+                  The deadline has passed — now <b>{TIMEOUT_OUTCOME[s]}</b>. Anyone can settle it.
                 </span>
-                <button className="btn" disabled={!!w.busy} onClick={() => act("settleExpired", [], "Rozliczono po terminie")}>
-                  Rozlicz teraz
+                <button className="btn" disabled={!!w.busy} onClick={() => act("settleExpired", [], "Settled after the deadline")}>
+                  Settle now
                 </button>
               </>
             ) : (
               <span>
-                Jeśli nikt nic nie zrobi przez <b>{fmtDuration(left)}</b>, {TIMEOUT_OUTCOME[s]}.
+                If nobody does anything within <b>{fmtDuration(left)}</b>, {TIMEOUT_OUTCOME[s]}.
               </span>
             )}
           </div>
@@ -203,19 +203,19 @@ export default function DealPage() {
       <MoneyRules deal={deal} vaultBalance={vaultBalance} />
 
       <section className="card">
-        <h2>Strony</h2>
-        <Party label="Sprzedawca" addr={deal.seller} rep={reps[deal.seller]} you={isSeller} />
-        <Party label="Kupujący" addr={deal.buyer} rep={reps[deal.buyer]} you={isBuyer} />
+        <h2>Parties</h2>
+        <Party label="Seller" addr={deal.seller} rep={reps[deal.seller]} you={isSeller} />
+        <Party label="Buyer" addr={deal.buyer} rep={reps[deal.buyer]} you={isBuyer} />
         {deal.tracking && (
           <p>
-            {stage ? "Efekt pracy: " : "Przesyłka: "}
+            {stage ? "Work result: " : "Parcel: "}
             {stage && /^https?:\/\//.test(deal.tracking) ? (
               <a href={deal.tracking} target="_blank" rel="noreferrer" className="plink mono">
                 {deal.tracking}
               </a>
             ) : (
               /^\d{20,26}$/.test(deal.tracking) ? (
-                <a href={`https://inpost.pl/sledzenie-przesylek?number=${deal.tracking}`} target="_blank" rel="noreferrer" className="plink mono" title="Status u przewoźnika — ten sam, który relayer oracle sprawdza w API InPost">
+                <a href={`https://inpost.pl/sledzenie-przesylek?number=${deal.tracking}`} target="_blank" rel="noreferrer" className="plink mono" title="Carrier status — the same one the oracle relayer checks in the InPost API">
                   {deal.tracking} ↗
                 </a>
               ) : (
@@ -226,9 +226,9 @@ export default function DealPage() {
         )}
         {deal.disputeReason && (
           <p className="quote">
-            Reklamacja: „{deal.disputeReason}”
+            Complaint: “{deal.disputeReason}”
             <br />
-            <small className="muted">Kaucja każdej strony: {fmtUsdc(deal.bond)}</small>
+            <small className="muted">Bond per party: {fmtUsdc(deal.bond)}</small>
           </p>
         )}
         {s === State.InArbitration && (
@@ -237,58 +237,58 @@ export default function DealPage() {
       </section>
 
       <section className="card">
-        <h2>Twoje akcje</h2>
+        <h2>Your actions</h2>
         <div className="actions">
           {canBuy && (
             <button
               className="btn"
               disabled={!!w.busy}
-              onClick={() => (w.mode === "wallet" && !deal.pickupAllowed ? w.buySponsored(deal) : act("fund", [], "Wpłacono do sejfu"))}
+              onClick={() => (w.mode === "wallet" && !deal.pickupAllowed ? w.buySponsored(deal) : act("fund", [], "Paid into the vault"))}
             >
-              Kup i zablokuj {fmtUsdc(deal.amount)} w sejfie
+              Buy and lock {fmtUsdc(deal.amount)} in the vault
             </button>
           )}
           {canBuy && w.mode === "wallet" && !deal.pickupAllowed && (
-            <p className="muted small">Opłatę sieci płaci sponsor, a brakujące testowe USDC doda kran — wystarczy podpisać w portfelu.</p>
+            <p className="muted small">A sponsor pays the network fee and a faucet tops up any missing test USDC — just sign in your wallet.</p>
           )}
 
           {isSeller && s === State.Created && (
-            <button className="btn ghost" disabled={!!w.busy} onClick={() => act("cancel", [], "Anulowano ofertę")}>
-              Anuluj ofertę
+            <button className="btn ghost" disabled={!!w.busy} onClick={() => act("cancel", [], "Offer cancelled")}>
+              Cancel offer
             </button>
           )}
 
           {isSeller && s === State.Funded && !expired && !isPickup && !stage && (
             <div className="inline">
-              <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="Numer przesyłki InPost" />
-              <button className="btn" disabled={!!w.busy || !tracking.trim()} onClick={() => act("markShipped", [tracking.trim()], "Zgłoszono nadanie")}>
-                Nadałem paczkę
+              <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="InPost tracking number" />
+              <button className="btn" disabled={!!w.busy || !tracking.trim()} onClick={() => act("markShipped", [tracking.trim()], "Shipment reported")}>
+                I've shipped the parcel
               </button>
             </div>
           )}
           {isSeller && s === State.Funded && !expired && stage && (
             <div className="inline">
-              <input value={workLink} onChange={(e) => setWorkLink(e.target.value)} placeholder="Link do efektu pracy (np. repozytorium, plik, podgląd)" />
-              <button className="btn" disabled={!!w.busy || !workLink.trim()} onClick={() => act("markShipped", [workLink.trim()], "Oddano etap")}>
-                Oddaję etap
+              <input value={workLink} onChange={(e) => setWorkLink(e.target.value)} placeholder="Link to the work (e.g. repository, file, preview)" />
+              <button className="btn" disabled={!!w.busy || !workLink.trim()} onClick={() => act("markShipped", [workLink.trim()], "Milestone delivered")}>
+                Deliver milestone
               </button>
             </div>
           )}
 
           {isBuyer && (s === State.Shipped || s === State.Delivered) && (
             <>
-              <button className="btn" disabled={!!w.busy} onClick={() => act("confirmReceipt", [], "Potwierdzono odbiór")}>
-                {stage ? "Akceptuję etap — wypłać wykonawcy" : "Wszystko OK — wypłać sprzedawcy"}
+              <button className="btn" disabled={!!w.busy} onClick={() => act("confirmReceipt", [], "Receipt confirmed")}>
+                {stage ? "Approve milestone — pay the contractor" : "All good — pay the seller"}
               </button>
               {!expired && (
                 <div className="inline col">
-                  <input value={disputeText} onChange={(e) => setDisputeText(e.target.value)} placeholder="Co jest nie tak?" />
+                  <input value={disputeText} onChange={(e) => setDisputeText(e.target.value)} placeholder="What's wrong?" />
                   <button
                     className="btn danger"
                     disabled={!!w.busy || !disputeText.trim()}
-                    onClick={() => act("openDispute", [disputeText.trim()], "Zgłoszono reklamację")}
+                    onClick={() => act("openDispute", [disputeText.trim()], "Complaint filed")}
                   >
-                    Zgłoś reklamację (kaucja {fmtUsdc(bond)})
+                    File a complaint (bond {fmtUsdc(bond)})
                   </button>
                 </div>
               )}
@@ -299,15 +299,15 @@ export default function DealPage() {
             <button
               className="btn"
               disabled={!!w.busy}
-              onClick={() => act("respondToDispute", [], "Skierowano do arbitrażu")}
+              onClick={() => act("respondToDispute", [], "Sent to arbitration")}
             >
-              Nie zgadzam się — arbitraż (kaucja {fmtUsdc(deal.bond)})
+              I disagree — go to arbitration (bond {fmtUsdc(deal.bond)})
             </button>
           )}
 
           {isSeller && [State.Funded, State.Shipped, State.Delivered, State.Disputed].includes(s) && (
-            <button className="btn ghost" disabled={!!w.busy} onClick={() => act("refundBuyer", [], "Zwrócono pieniądze")}>
-              {s === State.Disputed ? "Uznaj reklamację i zwróć pieniądze" : "Zwróć pieniądze kupującemu"}
+            <button className="btn ghost" disabled={!!w.busy} onClick={() => act("refundBuyer", [], "Money refunded")}>
+              {s === State.Disputed ? "Accept the complaint and refund" : "Refund the buyer"}
             </button>
           )}
 
@@ -318,26 +318,26 @@ export default function DealPage() {
           {isBuyer && s === State.Funded && (
             <p className="muted">
               {stage
-                ? "Czekasz, aż wykonawca odda etap. Jeśli nie zdąży — pieniądze wrócą do Ciebie automatycznie."
+                ? "Waiting for the contractor to deliver the milestone. If they miss the deadline, the money comes back to you automatically."
                 : isPickup
-                ? "Umów się na odbiór. Kod pokaż dopiero po obejrzeniu przedmiotu. Jeśli do spotkania nie dojdzie — pieniądze wrócą do Ciebie po terminie."
-                : "Czekasz, aż sprzedawca nada paczkę. Jeśli nie zdąży — pieniądze wrócą do Ciebie automatycznie."}
+                ? "Arrange the pickup. Show the code only after inspecting the item. If the meetup doesn't happen, the money comes back to you after the deadline."
+                : "Waiting for the seller to ship the parcel. If they miss the deadline, the money comes back to you automatically."}
             </p>
           )}
           {isBuyer && s === State.Disputed && (
-            <p className="muted">Czekasz na odpowiedź sprzedawcy. Jeśli zignoruje reklamację — wygrywasz.</p>
+            <p className="muted">Waiting for the seller's response. If they ignore the complaint, you win.</p>
           )}
           {(isBuyer || isSeller) && s === State.InArbitration && (
-            <p className="muted">Sprawę rozstrzygają arbitrzy. Jeśli nie zdążą — kwota zostanie podzielona 50/50.</p>
+            <p className="muted">Arbiters are deciding the case. If they run out of time, the amount is split 50/50.</p>
           )}
 
-          {!me && <p className="muted">Połącz portfel, aby działać.</p>}
-          {me && isFinal(s) && <p className="muted">Transakcja zamknięta — pieniądze rozliczone.</p>}
+          {!me && <p className="muted">Connect a wallet to take action.</p>}
+          {me && isFinal(s) && <p className="muted">Deal closed — the money has been settled.</p>}
           {s === State.InArbitration && !deal.panelDrawn && !isBuyer && !isSeller && (
-            <p className="muted">Skład arbitrów nie jest jeszcze wylosowany — losowanie może uruchomić każdy (panel „Strony”).</p>
+            <p className="muted">The arbiter panel hasn't been drawn yet — anyone can trigger the draw (“Parties” panel).</p>
           )}
           {me && !isFinal(s) && !isSeller && !isBuyer && !canBuy && !(isArb && s === State.InArbitration) && (
-            <p className="muted">Nie jesteś stroną tej transakcji.{expired ? " Możesz ją jednak rozliczyć po terminie." : ""}</p>
+            <p className="muted">You're not a party to this deal.{expired ? " You can still settle it after the deadline." : ""}</p>
           )}
         </div>
       </section>
@@ -354,15 +354,15 @@ export default function DealPage() {
 
       {w.mode === "demo" && !isFinal(s) && (
         <section className="card wide demo">
-          <h2>Panel demo</h2>
+          <h2>Demo panel</h2>
           <p className="muted">
-            Symulacja świata zewnętrznego: niezależne źródła statusu przesyłki (oracle) potwierdzają doręczenie. Terminy na devnecie
-            trwają minuty — wystarczy chwilę poczekać.
+            Simulating the outside world: independent parcel-status sources (oracles) confirm delivery. Deadlines on devnet
+            last minutes — just wait a moment.
           </p>
           {s === State.Shipped && !stage ? (
             <OraclePanel id={id} deal={deal} />
           ) : (
-            <p className="muted small">Potwierdzenia doręczenia są dostępne, gdy paczka jest w drodze.</p>
+            <p className="muted small">Delivery confirmations are available while the parcel is in transit.</p>
           )}
         </section>
       )}
@@ -371,11 +371,14 @@ export default function DealPage() {
   );
 }
 
+// Etykieta stanu końcowego bez przedrostka („… — wypłacono sprzedawcy” → „wypłacono sprzedawcy”).
+const finalLabel = (s: State) => STATE_LABEL[s].split(" — ").pop()!;
+
 const STEPS: { s: State; label: string }[] = [
-  { s: State.Created, label: "Oferta" },
-  { s: State.Funded, label: "Opłacona" },
-  { s: State.Shipped, label: "Nadana" },
-  { s: State.Delivered, label: "Doręczona" },
+  { s: State.Created, label: "Offer" },
+  { s: State.Funded, label: "Paid" },
+  { s: State.Shipped, label: "Shipped" },
+  { s: State.Delivered, label: "Delivered" },
 ];
 
 function Timeline({
@@ -396,11 +399,11 @@ function Timeline({
   if (stage) {
     return (
       <ol className="timeline">
-        <li className="done">Etap</li>
-        <li className={s >= State.Funded && s !== State.Cancelled ? "done" : ""}>Opłacony</li>
-        <li className={shipped ? "done" : ""}>Oddany</li>
-        {disputed && <li className="done warn">Spór</li>}
-        <li className={isFinal(s) ? "done final" : ""}>{isFinal(s) ? STATE_LABEL[s].replace("Zakończona — ", "") : "Akceptacja"}</li>
+        <li className="done">Milestone</li>
+        <li className={s >= State.Funded && s !== State.Cancelled ? "done" : ""}>Paid</li>
+        <li className={shipped ? "done" : ""}>Delivered</li>
+        {disputed && <li className="done warn">Dispute</li>}
+        <li className={isFinal(s) ? "done final" : ""}>{isFinal(s) ? finalLabel(s) : "Approval"}</li>
       </ol>
     );
   }
@@ -408,10 +411,10 @@ function Timeline({
     const met = s === State.Released;
     return (
       <ol className="timeline">
-        <li className="done">Oferta</li>
-        <li className={s >= State.Funded ? "done" : ""}>Opłacona</li>
-        <li className={met ? "done" : ""}>Spotkanie i kod odbioru</li>
-        <li className={isFinal(s) ? "done final" : ""}>{isFinal(s) ? STATE_LABEL[s].replace("Zakończona — ", "") : "Rozliczenie"}</li>
+        <li className="done">Offer</li>
+        <li className={s >= State.Funded ? "done" : ""}>Paid</li>
+        <li className={met ? "done" : ""}>Meetup and pickup code</li>
+        <li className={isFinal(s) ? "done final" : ""}>{isFinal(s) ? finalLabel(s) : "Settlement"}</li>
       </ol>
     );
   }
@@ -434,8 +437,8 @@ function Timeline({
           {st.label}
         </li>
       ))}
-      {disputed && <li className="done warn">Spór</li>}
-      <li className={isFinal(s) ? "done final" : ""}>{isFinal(s) ? STATE_LABEL[s].replace("Zakończona — ", "") : "Rozliczenie"}</li>
+      {disputed && <li className="done warn">Dispute</li>}
+      <li className={isFinal(s) ? "done final" : ""}>{isFinal(s) ? finalLabel(s) : "Settlement"}</li>
     </ol>
   );
 }
@@ -445,7 +448,7 @@ function Party({ label, addr, rep, you }: { label: string; addr: Address; rep?: 
     return (
       <div className="party">
         <span className="muted">{label}</span>
-        <span>każdy z linkiem</span>
+        <span>anyone with the link</span>
       </div>
     );
   }
@@ -453,11 +456,11 @@ function Party({ label, addr, rep, you }: { label: string; addr: Address; rep?: 
     <div className="party">
       <span className="muted">{label}</span>
       <span>
-        <Link href={`/u/${addr}`} className="plink"><b>{nameOf(addr) ?? short(addr)}</b></Link> {you && <span className="you">to Ty</span>}
+        <Link href={`/u/${addr}`} className="plink"><b>{nameOf(addr) ?? short(addr)}</b></Link> {you && <span className="you">you</span>}
         {rep && (
           <small className="muted">
             {" "}
-            · ✔ {dealsDone(rep.soldOk + rep.boughtOk)} · spory wygrane {rep.disputesWon}/{rep.disputesWon + rep.disputesLost}
+            · ✔ {dealsDone(rep.soldOk + rep.boughtOk)} · disputes won {rep.disputesWon}/{rep.disputesWon + rep.disputesLost}
           </small>
         )}
       </span>

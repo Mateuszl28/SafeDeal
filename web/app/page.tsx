@@ -41,14 +41,14 @@ export default function Home() {
     const src = q.get("zrodlo");
     const safeSrc = src && /^https?:\/\//.test(src) ? src : "";
     const opis = (q.get("opis") ?? "").trim();
-    setDescription([opis, safeSrc ? `Ogłoszenie: ${safeSrc}` : ""].filter(Boolean).join("\n").slice(0, 480));
+    setDescription([opis, safeSrc ? `Listing: ${safeSrc}` : ""].filter(Boolean).join("\n").slice(0, 480));
     if (safeSrc) {
       try {
         setFromListing(new URL(safeSrc).hostname);
       } catch {
         /* zły adres — pomijamy */
       }
-    } else setFromListing("ogłoszenia");
+    } else setFromListing("a listing");
   }, []);
 
   async function create(e: React.FormEvent) {
@@ -59,12 +59,12 @@ export default function Home() {
     try {
       amount = parseUsdc(price);
     } catch {
-      return setFormError("Nieprawidłowa cena.");
+      return setFormError("Invalid price.");
     }
     if (!title.trim() || amount <= 0n) return;
     const target = buyer.trim();
-    if (target && !isAddress(target)) return setFormError("To nie wygląda na adres Solany.");
-    if (new TextEncoder().encode(description.trim()).length > 500) return setFormError("Opis jest za długi (max 500 bajtów).");
+    if (target && !isAddress(target)) return setFormError("That doesn't look like a Solana address.");
+    if (new TextEncoder().encode(description.trim()).length > 500) return setFormError("The description is too long (max 500 bytes).");
 
     let photoUri = "";
     let photoHash = ZERO_HASH;
@@ -74,14 +74,14 @@ export default function Home() {
         photoUri = up.uri;
         photoHash = up.hash;
       } catch (err) {
-        return setFormError(`Nie udało się wysłać zdjęcia: ${err instanceof Error ? err.message : err}`);
+        return setFormError(`Couldn't upload the photo: ${err instanceof Error ? err.message : err}`);
       }
     }
     // Opis, zdjęcie i odbiór osobisty idą w JEDNEJ transakcji razem z ofertą.
     const sig = await w.write(
       "createDeal",
       [{ amount, title: title.trim(), buyer: target || null, description: description.trim(), photoUri, photoHash, pickupAllowed: pickupOk }],
-      { label: "Utworzono ofertę" },
+      { label: "Offer created" },
     );
     if (!sig) return;
     try {
@@ -105,32 +105,32 @@ export default function Home() {
   return (
     <div className="grid">
       <section className="hero">
-        <h1>Kupuj od obcych bez zaufania.</h1>
+        <h1>Buy from strangers without trust.</h1>
         <p>
-          Pieniądze kupującego trafiają do sejfu programu na blockchainie Solana, nie do sprzedawcy. Wypłata następuje dopiero po
-          potwierdzeniu doręczenia i oknie na reklamację. Jeśli ktoś zniknie, wynik jest z góry zapisany w kodzie.
+          The buyer's money goes into a program vault on the Solana blockchain, not to the seller. The payout happens only after
+          delivery is confirmed and the complaint window closes. If someone disappears, the outcome is already written in code.
         </p>
         <ol className="steps">
-          <li><b>Wpłata</b> — kupujący blokuje USDC w sejfie programu</li>
-          <li><b>Nadanie</b> — sprzedawca podaje numer przesyłki</li>
-          <li><b>Doręczenie</b> — {w.deployment?.oracleQuorum ?? 2} z {w.deployment?.oracles.length ?? 3} niezależnych źródeł potwierdza status</li>
-          <li><b>Wypłata</b> — automatycznie po oknie na reklamację</li>
+          <li><b>Payment</b> — the buyer locks USDC in the program vault</li>
+          <li><b>Shipping</b> — the seller enters the tracking number</li>
+          <li><b>Delivery</b> — {w.deployment?.oracleQuorum ?? 2} of {w.deployment?.oracles.length ?? 3} independent sources confirm the status</li>
+          <li><b>Payout</b> — automatic once the complaint window closes</li>
         </ol>
       </section>
 
       <section className="card" id="nowa-oferta">
-        <h2>Nowa oferta</h2>
+        <h2>New offer</h2>
         {fromListing && (
           <p className="muted small">
-            Dane z ogłoszenia ({fromListing}) — sprawdź je przed wystawieniem. Po wystawieniu wklej link do oferty SafeDeal w ogłoszeniu.
+            Details from {fromListing} — check them before publishing. Once published, paste the SafeDeal offer link into your listing.
           </p>
         )}
-        <div className="form-tabs" role="tablist" aria-label="Rodzaj oferty">
+        <div className="form-tabs" role="tablist" aria-label="Offer type">
           <button type="button" role="tab" aria-selected={kind === "item"} className={kind === "item" ? "on" : ""} onClick={() => setKind("item")}>
-            Przedmiot
+            Item
           </button>
           <button type="button" role="tab" aria-selected={kind === "project"} className={kind === "project" ? "on" : ""} onClick={() => setKind("project")}>
-            Zlecenie w etapach
+            Milestone project
           </button>
         </div>
         {kind === "project" ? (
@@ -138,39 +138,39 @@ export default function Home() {
         ) : (
         <form onSubmit={create} className="form">
           <label>
-            Co sprzedajesz?
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="np. Rower gravel Kross Esker" maxLength={80} />
+            What are you selling?
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Kross Esker gravel bike" maxLength={80} />
           </label>
           <label>
-            Cena (USDC)
+            Price (USDC)
             <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="250" inputMode="decimal" />
             {(() => {
               try {
                 const v = parseUsdc(price);
-                return v > 0n ? <Pln usdc={v} prefix="to ok. " /> : null;
+                return v > 0n ? <Pln usdc={v} prefix="≈ " /> : null;
               } catch {
                 return null;
               }
             })()}
           </label>
           <label>
-            Opis <small className="muted">(stan, rozmiar, wady — zapisany on-chain, nie zmienisz go po wpłacie)</small>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={400} placeholder="np. Rama 54, przebieg 800 km, drobna rysa na widelcu" />
+            Description <small className="muted">(condition, size, defects — stored on-chain, can't be changed after payment)</small>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={400} placeholder="e.g. 54 cm frame, 800 km ridden, small scratch on the fork" />
           </label>
           <label>
-            Zdjęcie <small className="muted">(opcjonalnie — jego odcisk trafi do blockchaina)</small>
+            Photo <small className="muted">(optional — its fingerprint is stored on the blockchain)</small>
             <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
           </label>
           <label className="check">
             <input type="checkbox" checked={pickupOk} onChange={(e) => setPickupOk(e.target.checked)} />
-            Możliwy odbiór osobisty (kupujący płaci do sejfu i pokazuje kod na spotkaniu)
+            In-person pickup available (the buyer pays into the vault and shows a code when you meet)
           </label>
           <label>
-            Konkretny kupujący <small className="muted">(opcjonalnie — adres portfela)</small>
-            <input value={buyer} onChange={(e) => setBuyer(e.target.value)} placeholder="adres Solany albo puste = każdy" />
+            Specific buyer <small className="muted">(optional — wallet address)</small>
+            <input value={buyer} onChange={(e) => setBuyer(e.target.value)} placeholder="Solana address, or empty = anyone" />
           </label>
           <button className="btn" disabled={!w.deployment || !!w.busy || !title.trim() || !price}>
-            Utwórz ofertę i link
+            Create offer and link
           </button>
           {formError && <p className="err-text">{formError}</p>}
         </form>
@@ -181,27 +181,27 @@ export default function Home() {
         <ProfileSummary address={w.address} deals={deals} compact />
       ) : (
         <section className="card">
-          <h2>Twój profil</h2>
-          <p className="muted">Połącz portfel, aby zobaczyć swoją reputację.</p>
+          <h2>Your profile</h2>
+          <p className="muted">Connect a wallet to see your reputation.</p>
         </section>
       )}
 
       {isArbiter && (
-        <DealList title="Sprawy, do których Cię wylosowano" rows={cases} empty="Żaden spór nie czeka na Twój głos." />
+        <DealList title="Cases you were drawn for" rows={cases} empty="No dispute is waiting for your vote." />
       )}
-      <DealList title="Moje transakcje" rows={mine} empty="Nie masz jeszcze transakcji." />
+      <DealList title="My deals" rows={mine} empty="You don't have any deals yet." />
       <section className="card wide search-card">
         <div className="search-row">
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Szukaj w ofertach: tytuł lub opis…" aria-label="Szukaj ofert" />
-          <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Sortowanie">
-            <option value="new">Najnowsze</option>
-            <option value="cheap">Najtańsze</option>
-            <option value="expensive">Najdroższe</option>
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search offers: title or description…" aria-label="Search offers" />
+          <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Sort">
+            <option value="new">Newest</option>
+            <option value="cheap">Cheapest</option>
+            <option value="expensive">Most expensive</option>
           </select>
         </div>
       </section>
-      <DealList title="Otwarte oferty" rows={open} empty={q ? "Nic nie pasuje do wyszukiwania." : "Brak otwartych ofert."} />
-      {rest.length > 0 && <DealList title="Pozostałe" rows={rest} />}
+      <DealList title="Open offers" rows={open} empty={q ? "Nothing matches your search." : "No open offers."} />
+      {rest.length > 0 && <DealList title="Other" rows={rest} />}
     </div>
   );
 }

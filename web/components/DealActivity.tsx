@@ -75,47 +75,47 @@ export function describeEvent(e: ChainEvent, deal: Deal): string {
   const a = e.data;
   switch (e.name) {
     case "DealCreated":
-      return `${who(a.seller)} wystawia ofertę za ${fmtUsdc(evBig(a.amount))}`;
+      return `${who(a.seller)} lists an offer for ${fmtUsdc(evBig(a.amount))}`;
     case "DealFunded":
-      return `${who(a.buyer)} wpłaca ${fmtUsdc(deal.amount)} do sejfu transakcji`;
+      return `${who(a.buyer)} pays ${fmtUsdc(deal.amount)} into the deal vault`;
     case "DealShipped":
-      return `${who(deal.seller)} nadaje przesyłkę ${String(a.tracking)}`;
+      return `${who(deal.seller)} ships parcel ${String(a.tracking)}`;
     case "DeliveryAttested":
-      return `Źródło statusu „${who(a.oracle)}” potwierdza doręczenie (${Number(a.count)} potwierdz.)`;
+      return `Status source “${who(a.oracle)}” confirms delivery (${Number(a.count)} confirm.)`;
     case "DealDelivered":
-      return "Wymagana liczba potwierdzeń: doręczono — rusza okno reklamacji";
+      return "Required confirmations reached: delivered — the complaint window opens";
     case "DisputeOpened":
-      return `${who(deal.buyer)} zgłasza reklamację: „${String(a.reason)}” (kaucja ${fmtUsdc(deal.bond)})`;
+      return `${who(deal.buyer)} files a complaint: “${String(a.reason)}” (bond ${fmtUsdc(deal.bond)})`;
     case "ArbitrationStarted":
-      return `${who(deal.seller)} odrzuca reklamację i wpłaca kaucję — skład arbitrów wylosuje hash slotu ${String(a.drawSlot)}`;
+      return `${who(deal.seller)} rejects the complaint and posts a bond — the arbiter panel will be drawn from the hash of slot ${String(a.drawSlot)}`;
     case "DrawRescheduled":
-      return `Slot losowania wypadł z historii — losowanie przesunięte na slot ${String(a.drawSlot)}`;
+      return `The draw slot fell out of history — draw moved to slot ${String(a.drawSlot)}`;
     case "PanelDrawn":
-      return `Wylosowany skład arbitrów: ${(a.panel as unknown[]).map(who).join(", ")}`;
+      return `Arbiter panel drawn: ${(a.panel as unknown[]).map(who).join(", ")}`;
     case "ArbiterSettled": {
-      const parts = [evBig(a.reward) > 0n ? `nagroda ${fmtUsdc(evBig(a.reward))}` : "", evBig(a.slashed) > 0n ? `kara za nieobecność ${fmtUsdc(evBig(a.slashed))} (spalona)` : ""].filter(Boolean);
-      return `Rozliczenie arbitra ${who(a.arbiter)}${parts.length ? `: ${parts.join(", ")}` : ""}${a.removed ? " — kaucja poniżej minimum, wypada z puli" : ""}`;
+      const parts = [evBig(a.reward) > 0n ? `reward ${fmtUsdc(evBig(a.reward))}` : "", evBig(a.slashed) > 0n ? `no-show penalty ${fmtUsdc(evBig(a.slashed))} (burned)` : ""].filter(Boolean);
+      return `Arbiter ${who(a.arbiter)} settled${parts.length ? `: ${parts.join(", ")}` : ""}${a.removed ? " — bond below minimum, removed from the pool" : ""}`;
     }
     case "DealArchived":
-      return "Konta transakcji zamknięte — rent wrócił do sprzedawcy, opis zostaje w historii łańcucha";
+      return "Deal accounts closed — rent returned to the seller, the description stays in the chain history";
     case "VoteCommitted":
-      return `${who(a.arbiter)} oddaje niejawny głos (zapisany tylko odcisk)`;
+      return `${who(a.arbiter)} casts a sealed vote (only its hash is stored)`;
     case "Voted":
-      return `${who(a.arbiter)} ujawnia głos: za ${a.forBuyer ? "kupującym" : "sprzedawcą"}`;
+      return `${who(a.arbiter)} reveals their vote: for the ${a.forBuyer ? "buyer" : "seller"}`;
     case "Evidence":
-      return `${who(a.party)} dodaje dowód${a.note ? `: ${String(a.note)}` : ""}`;
+      return `${who(a.party)} adds evidence${a.note ? `: ${String(a.note)}` : ""}`;
     case "PickupConfirmed":
-      return "Kod odbioru prawidłowy — przedmiot wydany na spotkaniu";
+      return "Pickup code valid — item handed over at the meetup";
     case "Reviewed": {
       const n = Number(a.stars);
-      return `${who(a.author)} wystawia opinię: ${"★".repeat(n)}${"☆".repeat(5 - n)}${a.comment ? ` — „${String(a.comment)}”` : ""}`;
+      return `${who(a.author)} leaves a review: ${"★".repeat(n)}${"☆".repeat(5 - n)}${a.comment ? ` — “${String(a.comment)}”` : ""}`;
     }
     case "SettlementProposed":
-      return `${who(a.proposer)} proponuje ugodę: ${fmtUsdc(evBig(a.buyerAmount))} wraca do kupującego`;
+      return `${who(a.proposer)} proposes a settlement: ${fmtUsdc(evBig(a.buyerAmount))} goes back to the buyer`;
     case "Settled":
-      return `Ugoda przyjęta: kupujący ${fmtUsdc(evBig(a.buyerAmount))}, sprzedawca ${fmtUsdc(evBig(a.sellerAmount))}`;
+      return `Settlement accepted: buyer ${fmtUsdc(evBig(a.buyerAmount))}, seller ${fmtUsdc(evBig(a.sellerAmount))}`;
     case "DealClosed":
-      return STATE_LABEL[Number(a.outcome) as State] ?? "Transakcja zamknięta";
+      return STATE_LABEL[Number(a.outcome) as State] ?? "Deal closed";
     default:
       return e.name;
   }
@@ -131,7 +131,7 @@ export function useDealLogs(deal: Deal | null | undefined) {
 
 // ───────────────────────────── widoki ─────────────────────────────
 
-const fmtTime = (t: number) => (t ? new Date(t * 1000).toLocaleString("pl-PL") : "");
+const fmtTime = (t: number) => (t ? new Date(t * 1000).toLocaleString("en-GB") : "");
 
 export function HistorySection({ id, deal }: { id: bigint; deal: Deal }) {
   const w = useWallet();
@@ -140,13 +140,13 @@ export function HistorySection({ id, deal }: { id: bigint; deal: Deal }) {
   if (events === undefined) return null;
   return (
     <section className="card wide">
-      <h2>Historia transakcji</h2>
+      <h2>Deal history</h2>
       <p className="muted small">
-        Każdy wpis to operacja zapisana w publicznym rejestrze Solany — nie da się jej usunąć ani zmienić. Kliknij „Explorer”, żeby
-        sprawdzić ją samodzielnie, bez ufania nam.
+        Every entry is an operation recorded in Solana's public ledger — it can't be deleted or altered. Click “Explorer” to
+        verify it yourself, without trusting us.
       </p>
       {entries.length === 0 ? (
-        <p className="muted small">Historia jeszcze się wczytuje albo publiczny serwer chwilowo odmówił — spróbuj za moment.</p>
+        <p className="muted small">The history is still loading or the public server temporarily refused — try again in a moment.</p>
       ) : (
         <ol className="history">
           {entries.map((e, i) => (
@@ -173,7 +173,7 @@ function EvidenceItem({ e }: { e: ChainEvent }) {
   return (
     <li className="evidence">
       <a href={uri} target="_blank" rel="noreferrer" className="thumb">
-        {isImage ? <img src={uri} alt={note || "dowód"} /> : <span>📄</span>}
+        {isImage ? <img src={uri} alt={note || "evidence"} /> : <span>📄</span>}
       </a>
       <div>
         <b>{who(e.data.party)}</b>
@@ -207,7 +207,7 @@ export function EvidenceSection({ id, deal }: { id: bigint; deal: Deal }) {
     setErr(undefined);
     try {
       const json = await uploadFile(file);
-      const ok = await w.write("submitEvidence", [json.uri, json.hash, note.trim()], { deal, label: "Zapisuję odcisk dowodu" });
+      const ok = await w.write("submitEvidence", [json.uri, json.hash, note.trim()], { deal, label: "Saving evidence fingerprint" });
       if (ok) {
         setFile(null);
         setNote("");
@@ -222,10 +222,10 @@ export function EvidenceSection({ id, deal }: { id: bigint; deal: Deal }) {
 
   return (
     <section className="card wide">
-      <h2>Dowody</h2>
+      <h2>Evidence</h2>
       <p className="muted small">
-        Plik trafia do magazynu, a jego odcisk (SHA-256) — do publicznego rejestru. Każdy, np. arbiter, może sprawdzić, że nikt go
-        później nie podmienił.
+        The file goes to storage and its fingerprint (SHA-256) to the public ledger. Anyone, e.g. an arbiter, can check that nobody
+        swapped it later.
       </p>
       {entries.length > 0 && (
         <ul className="evidence-list">
@@ -237,9 +237,9 @@ export function EvidenceSection({ id, deal }: { id: bigint; deal: Deal }) {
       {canAdd && (
         <div className="inline evidence-form">
           <input key={inputKey} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Opis, np. zdjęcie uszkodzonej ramy" maxLength={120} />
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Description, e.g. photo of the damaged frame" maxLength={120} />
           <button className="btn" disabled={!file || uploading || !!w.busy} onClick={submit}>
-            {uploading ? "Wysyłam…" : "Dodaj dowód"}
+            {uploading ? "Uploading…" : "Add evidence"}
           </button>
         </div>
       )}

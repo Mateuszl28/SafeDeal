@@ -33,10 +33,10 @@ export function CloseDealPanel({ deal }: { deal: Deal }) {
   if (deal.archived) {
     return (
       <section className="card wide archived">
-        <h2>Konta zamknięte</h2>
+        <h2>Accounts closed</h2>
         <p className="muted">
-          Transakcja jest rozliczona, a jej konta w sieci zamknięto — kaucja za przechowywanie (rent) wróciła do sprzedawcy. Opis, strony
-          i wynik pochodzą ze zdarzenia zapisanego w historii łańcucha przy zamknięciu; nikt nie może ich zmienić.
+          The deal is settled and its on-chain accounts have been closed — the storage deposit (rent) went back to the seller. The description, parties
+          and outcome come from the event recorded in the chain history at closing; nobody can change them.
         </p>
       </section>
     );
@@ -46,24 +46,24 @@ export function CloseDealPanel({ deal }: { deal: Deal }) {
   const openAt = deal.closedAt + BigInt(w.deployment.windows.archive ?? 0);
   const allowed = reviewsDone || w.now > openAt;
   const toSettle = deal.panelDrawn ? deal.panel.filter((_, i) => !((deal.panelSettled >> i) & 1)).length : 0;
-  const seller = nameOf(deal.seller) ?? "sprzedawcy";
+  const seller = nameOf(deal.seller) ?? "the seller";
 
   return (
     <section className="card wide">
-      <h2>Porządki po transakcji</h2>
+      <h2>Deal cleanup</h2>
       <p className="muted">
-        Konto transakcji i sejf zajmują miejsce w sieci — sprzedawca zapłacił za nie kaucję za przechowywanie
-        {rent !== undefined && <> ({(rent / LAMPORTS_PER_SOL).toLocaleString("pl-PL", { maximumFractionDigits: 4 })} SOL)</>}. Po zamknięciu
-        wraca ona do {seller}. Zamknąć może każdy — program sam wysyła rent na adres sprzedawcy.
-        {toSettle > 0 && <> Przy okazji program rozliczy {toSettle} arbitrów ze składu: nagrody z kaucji przegranego, kary za brak głosu.</>}
+        The deal account and vault take up space on the network — the seller paid a storage deposit for them
+        {rent !== undefined && <> ({(rent / LAMPORTS_PER_SOL).toLocaleString("en-GB", { maximumFractionDigits: 4 })} SOL)</>}. On closing
+        it goes back to {seller}. Anyone can close them — the program itself sends the rent to the seller's address.
+        {toSettle > 0 && <> The program will also settle {toSettle} arbiters from the panel: rewards from the loser's bond, penalties for not voting.</>}
       </p>
       {allowed ? (
-        <button className="btn ghost" disabled={!!w.busy || !w.address} onClick={() => w.write("closeDeal", [], { deal, label: "Zamknięto konta transakcji" })}>
-          Zamknij konta i zwróć rent sprzedawcy
+        <button className="btn ghost" disabled={!!w.busy || !w.address} onClick={() => w.write("closeDeal", [], { deal, label: "Deal accounts closed" })}>
+          Close accounts and return rent to the seller
         </button>
       ) : (
         <p className="small">
-          Najpierw czas na opinie: zamknięcie będzie możliwe po wystawieniu obu opinii albo za <b>{fmtDuration(openAt - w.now)}</b>.
+          Reviews come first: closing becomes possible once both reviews are in, or in <b>{fmtDuration(openAt - w.now)}</b>.
         </p>
       )}
     </section>

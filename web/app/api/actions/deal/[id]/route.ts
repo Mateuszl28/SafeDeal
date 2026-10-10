@@ -28,12 +28,12 @@ export async function OPTIONS() {
 
 async function load(idParam: string) {
   const d = serverDeployment();
-  if (!d) throw new Error("Brak wdrożenia programu.");
-  if (!/^\d{1,18}$/.test(idParam)) throw new Error("Nieprawidłowy numer oferty.");
+  if (!d) throw new Error("Program is not deployed.");
+  if (!/^\d{1,18}$/.test(idParam)) throw new Error("Invalid offer number.");
   const connection = serverConnection(d);
   const program = readProgram(connection, d);
   const deal = await fetchDeal(program, d, BigInt(idParam));
-  if (!deal) throw new Error(`Nie ma oferty #${idParam}.`);
+  if (!deal) throw new Error(`Offer #${idParam} doesn't exist.`);
   return { d, connection, program, deal };
 }
 
@@ -51,18 +51,18 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
       title: `${deal.title} — ${fmtUsdc(deal.amount)}`,
       description: [
         deal.description,
-        `Pieniądze trafią do sejfu programu SafeDeal na Solanie, nie do sprzedawcy. Jeśli paczka nie wyjdzie w ${minutes(w.ship)}, wrócą do Ciebie automatycznie. Wypłata dopiero po potwierdzeniu doręczenia (${d.oracleQuorum} z ${d.oracles.length} źródeł) i oknie reklamacji.`,
-        "Opłatę sieci płaci sponsor — nie potrzebujesz SOL.",
+        `The money goes to the SafeDeal program's vault on Solana, not to the seller. If the parcel isn't shipped within ${minutes(w.ship)}, it comes back to you automatically. Paid out only after delivery is confirmed (${d.oracleQuorum} of ${d.oracles.length} sources) and the claim window has passed.`,
+        "Network fees are paid by a sponsor — you don't need SOL.",
       ]
         .filter(Boolean)
         .join("\n\n"),
-      label: `Kup i zablokuj ${fmtUsdc(deal.amount)}`,
+      label: `Buy and lock ${fmtUsdc(deal.amount)}`,
       disabled: !open,
       ...(open
         ? {}
-        : { error: { message: deal.pickupAllowed ? "Ta oferta wymaga odbioru osobistego — kup ją na stronie SafeDeal." : "Ta oferta nie czeka już na kupującego." } }),
+        : { error: { message: deal.pickupAllowed ? "This offer requires in-person pickup — buy it on the SafeDeal site." : "This offer is no longer waiting for a buyer." } }),
       links: {
-        actions: [{ type: "transaction", label: `Kup i zablokuj ${fmtUsdc(deal.amount)}`, href: `${origin}/api/actions/deal/${id}` }],
+        actions: [{ type: "transaction", label: `Buy and lock ${fmtUsdc(deal.amount)}`, href: `${origin}/api/actions/deal/${id}` }],
       },
     });
   } catch (e) {
@@ -74,18 +74,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   try {
     const { d, connection, program, deal } = await load(id);
-    if (deal.state !== State.Created) return json({ message: "Ta oferta nie czeka już na kupującego." }, 400);
-    if (deal.pickupAllowed) return json({ message: "Odbiór osobisty kupisz na stronie SafeDeal (potrzebny tajny kod)." }, 400);
+    if (deal.state !== State.Created) return json({ message: "This offer is no longer waiting for a buyer." }, 400);
+    if (deal.pickupAllowed) return json({ message: "Buy in-person pickup offers on the SafeDeal site (a secret code is needed)." }, 400);
 
     let buyer: PublicKey;
     try {
       buyer = new PublicKey(((await req.json()) as { account?: string }).account ?? "");
     } catch {
-      return json({ message: "Nieprawidłowy adres portfela." }, 400);
+      return json({ message: "Invalid wallet address." }, 400);
     }
     const b58 = buyer.toBase58();
-    if (b58 === deal.seller) return json({ message: "Nie możesz kupić własnej oferty." }, 400);
-    if (!isZero(deal.buyer) && deal.buyer !== b58) return json({ message: "Ta oferta jest dla innego kupującego." }, 400);
+    if (b58 === deal.seller) return json({ message: "You can't buy your own offer." }, 400);
+    if (!isZero(deal.buyer) && deal.buyer !== b58) return json({ message: "This offer is reserved for another buyer." }, 400);
 
     const sponsor = sponsorKey();
     const ixs = [];
@@ -114,7 +114,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return json({
       type: "transaction",
       transaction: tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64"),
-      message: `Wpłacasz ${fmtUsdc(deal.amount)} do sejfu programu. Sprzedawca dostanie je dopiero po doręczeniu albo Twoim potwierdzeniu.`,
+      message: `You're paying ${fmtUsdc(deal.amount)} into the program's vault. The seller gets it only after delivery or your confirmation.`,
     });
   } catch (e) {
     return json({ message: e instanceof Error ? e.message.slice(0, 300) : String(e) }, 400);
